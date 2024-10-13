@@ -19,3 +19,13 @@ class Keypoint(Enum):
     RightKnee = 14
     LeftAnkle = 15
     RightAnkle = 16
+    
+    
+    
+if __name__ == "__main__":
+    print(Keypoint.Nose.name)
+    print(Keypoint.Nose.value)
+    print(Keypoint(10).name)
+    KEYPOINTS = [9, 10, 11]
+    KEYPOINTS = [Keypoint(k) for k in KEYPOINTS]
+    print({k.value: [0] for k in KEYPOINTS})

@@ -20,10 +20,12 @@ class SignalContainer:
 
     Attributes:
     ----------
-    signal : List[np.ndarray]
+    signal_list : List[np.ndarray]
         A list containing the signal updates for each step.
     signal_frame_log : List[int]
         A list that stores the frame_id for each signal update.
+    signal : Optional[np.ndarray]
+        A NumPy array representing the current signal matrix (initially None).
     keypoints : Optional[np.ndarray]
         A NumPy array representing the keypoints of the previous step (initially None).
     frame_id : int
@@ -33,8 +35,9 @@ class SignalContainer:
     _new_idxs : Optional[np.ndarray]
         A NumPy array representing the idx vector for the new step keypoints (initially None).
     """
-    signal: list[np.ndarray] = field(factory=list)
+    signal_list: list[np.ndarray] = field(factory=list)
     signal_frame_log: list[int] = field(factory=list)
+    signal: Optional[np.ndarray] = None
     keypoints: Optional[np.ndarray] = None
     frame_id: int = -1
     _new_keypoints: Optional[np.ndarray] = None
@@ -69,8 +72,8 @@ class SignalContainer:
         Updates the signal matrix using the current keypoints and new keypoints after preprocessing.
         """
         if self.keypoints is not None and self._new_keypoints is not None:
-            signal_update = calculate_distance_matrix(self.keypoints, self._new_keypoints)
-            self.signal.append(signal_update)
+            self.signal = calculate_distance_matrix(self.keypoints, self._new_keypoints)
+            self.signal_list.append(self.signal)
             self.signal_frame_log.append(self.frame_id)
 
     def update_keypoints(self) -> None:
@@ -140,7 +143,7 @@ class SignalContainer:
 
         for i in range(len(self.signal_frame_log)):
             
-            _df = pd.DataFrame(self.signal[i], columns=[Keypoint(j).name for j in range(17)])
+            _df = pd.DataFrame(self.signal_list[i], columns=[Keypoint(j).name for j in range(17)])
             _df = _df.reset_index(names="idx").assign(frame=self.signal_frame_log[i], idx = lambda x: x.idx + 1)
             
             df.append(_df)
