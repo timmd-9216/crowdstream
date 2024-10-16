@@ -8,6 +8,7 @@ import subprocess
 client = storage.Client()
 bucket_name = os.getenv('BUCKET_NAME', 'default-bucket-name')
 stems_number = os.getenv('STEMS_NUMBER', '5')
+drumsep = os.getenv('DRUMSEP', 'False')
 print(f"Stems amount: {stems_number}")
 input_dir = 'input/'
 output_dir = 'output/'
@@ -51,6 +52,12 @@ def process_files():
         filename = os.path.splitext(os.path.basename(blob.name))[0]
         local_output_path_final = os.path.join(local_output_path,filename)
         print(f"Final output is in {local_output_path_final}")
+
+        drums_input = '/tmp/' + os.path.basename(local_input_path) + '/drums.wav'
+        #evaluar forzar la creación del directorio drums
+        drums_oputput = '/tmp/output/drums'
+        if drumsep.lower() == 'true':
+           subprocess.run(['drumsep', drums_input, drums_output])
 
         # Upload the processed file back to GCS
         output_files = os.listdir(local_output_path_final)
