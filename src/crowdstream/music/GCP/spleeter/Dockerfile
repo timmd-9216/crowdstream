@@ -11,12 +11,6 @@ RUN pip install musdb museval
 RUN pip install spleeter==${SPLEETER_VERSION}
 RUN pip install google-cloud-storage
 
-# drumsep
-RUN git clone https://github.com/inagoy/drumsep.git
-RUN cd drumsep && mkdir model
-RUN cd /drumsep/model && gdown 1-Dm666ScPkg8Gt2-lK3Ua0xOudWHZBGC
-RUN chmod 755 /drumsep/drumsep
-
 # Copy the Python script into the container (you need to have a script in the same directory)
 COPY process_audio.py /app/process_audio.py
 

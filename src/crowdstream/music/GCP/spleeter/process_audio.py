@@ -1,7 +1,6 @@
 from google.cloud import storage
 import os
 import subprocess
-import glob #tmp
 
 # Procesa archivos .mp3 o .wav
 
@@ -9,7 +8,6 @@ import glob #tmp
 client = storage.Client()
 bucket_name = os.getenv('BUCKET_NAME', 'default-bucket-name')
 stems_number = os.getenv('STEMS_NUMBER', '5')
-drumsep = os.getenv('DRUMSEP', 'False')
 print(f"Stems amount: {stems_number}")
 input_dir = 'input/'
 output_dir = 'output/'
@@ -54,19 +52,6 @@ def process_files():
         local_output_path_final = os.path.join(local_output_path,filename)
         print(f"Final output is in {local_output_path_final}")
 
-        drums_input = '/tmp/output/' + os.path.splitext(os.path.basename(local_input_path))[0] + '/drums.wav'
-        #evaluar forzar la creación del directorio drums
-        #drums_output = '/drums'
-        drums_output = '/tmp/output/' + os.path.splitext(os.path.basename(local_input_path))[0] + '/'
-        if drumsep.lower() == 'true':
-           print(f"Drum sep process over {drums_input}")
-           #subprocess.run(['/drumsep/drumsep', drums_input, drums_output])
-
-           subprocess.run(['cp', drums_input, '/output/drums.wav'])
-           subprocess.run(['/drumsep/drumsep', '/output/drums.wav', local_output_path_final])
-
-        print(glob.glob(drums_output+"/49469ca8/*"))
-
         # Upload the processed file back to GCS
         output_files = os.listdir(local_output_path_final)
         for output_file in output_files:
@@ -82,5 +67,4 @@ def process_files():
 
 if __name__ == "__main__":
     process_files()
-
 
