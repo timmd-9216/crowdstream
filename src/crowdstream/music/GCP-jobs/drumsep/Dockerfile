@@ -15,8 +15,11 @@ RUN cd /drumsep/model && gdown 1-Dm666ScPkg8Gt2-lK3Ua0xOudWHZBGC
 RUN chmod 755 /drumsep/drumsep
 RUN mkdir /data
 
+# Copy the Python script into the container (you need to have a script in the same directory)
+COPY process_audio.py /app/process_audio.py
+
 # Set the working directory
-WORKDIR /drumsep
+WORKDIR /app
 
 # Use the Python script as the entry point
-ENTRYPOINT ["/drumsep/drumsep"]
+CMD ["python", "process_audio.py"]
