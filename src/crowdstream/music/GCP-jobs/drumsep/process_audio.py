@@ -2,6 +2,11 @@ from google.cloud import storage
 import os
 import subprocess
 import glob #tmp
+#import gdown
+
+#id = "1-Dm666ScPkg8Gt2-lK3Ua0xOudWHZBGC"
+#gdown.download(id=id, output='/drumsep/model/49469ca8.th')
+
 
 # Procesa archivos .mp3 o .wav
 
@@ -35,31 +40,36 @@ def process_files():
     files = list_files(bucket_name, input_dir)
     for blob in files:
         local_input_path = '/tmp/' + os.path.basename(blob.name)
-        local_output_path = '/tmp/output'
+        local_output_path = '/tmp/output/drums'
         os.makedirs(local_output_path, exist_ok=True)
 
         # Download the file
-        print(f"Downloading {blob.name}")
+        print(f"Downloading from bucket {blob.name}")
         download_blob(bucket_name, blob.name, local_input_path)
 
         #print(f"Final output is in {local_output_path_final}")
 
         #drums_input = '/tmp/output/' + os.path.splitext(os.path.basename(local_input_path))[0] + '/drums.wav'
         drums_input = local_input_path
-        drums_output = '/tmp/output/' + os.path.splitext(os.path.basename(local_input_path))[0] + '/'
+        #drums_output = '/tmp/output/' + os.path.splitext(os.path.basename(local_input_path))[0] + '/'
+        drums_output = local_output_path
 
         print(f"Drum sep process over {drums_input}")
-        subprocess.run(['/drumsep/drumsep', drums_input, drums_output])
+        subprocess.run(['demucs','--repo',"model","-o",drums_output,"-n","49469ca8",drums_input])
+        subprocess.run(['/drumsep/drumsep','/tmp/drums.wav','/tmp/'])
 
-#           subprocess.run(['cp', drums_input, '/output/drums.wav'])
-#           subprocess.run(['/drumsep/drumsep', '/output/drums.wav', local_output_path_final])
-
+        print(glob.glob("/tmp/*"))
+        print(glob.glob("/drumsep/*"))
+        print(glob.glob("/drumsep/model/*"))
+        print(glob.glob(drums_output+"/*"))
         print(glob.glob(drums_output+"/49469ca8/*"))
 
         # Upload the processed file back to GCS
-        output_files = os.listdir(local_output_path_final)
+        drums_output = drums_output +"/49469ca8/"
+        output_files = os.listdir(drums_output)
+
         for output_file in output_files:
-            full_output_path = os.path.join(local_output_path_final, output_file)
+            full_output_path = os.path.join(drums_output, output_file)
             gcs_output_path = os.path.join(output_dir,filename,os.path.basename(output_file))
             print(f"Uploading {full_output_path} to {gcs_output_path}")
             upload_blob(bucket_name, full_output_path, gcs_output_path)
