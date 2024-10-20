@@ -26,8 +26,16 @@ Check if with less RAM exits the process
 16gb RAM
 8 CPU
 
+# Run GCP Job
 
-# Run
+	Final output will be in [BUCKET]/drums-output/[TRACK]-drums/ as:
+		bombo.wav
+		platillos.wav
+		redoblante.wav
+		toms.wav
+
+
+# Run as local docker instance
 	mkdir -p data/input
 	mv [ORIGIN-DRUM-TRACK] data/input/drums.wav
 	mkdir data/output
