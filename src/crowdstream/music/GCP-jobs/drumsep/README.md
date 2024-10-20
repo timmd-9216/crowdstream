@@ -19,6 +19,12 @@ You can verify this by checking the list of images in GCR:
 Then:
 	gcloud builds submit --config cloudbuild.yaml . # enables layer cache, speeds up docker image building
 
+## Instance
+
+Check if with less RAM exits the process
+
+16gb RAM
+8 CPU
 
 
 # Run
