@@ -5,11 +5,10 @@ import numpy as np
 import pandas as pd
 from attrs import define, field
 
-from crowdstream.cv.matrix_ops import (calculate_distance_matrix,
-                                       create_new_keypoints_matrix,
-                                       extend_keypoints_matrix,
-                                       get_idxs_and_kps_from_result,
-                                       replace_zeros_with_keypoints_mask)
+from crowdstream.cv.signal.matrix_ops import (
+    calculate_distance_matrix, create_new_keypoints_matrix,
+    extend_keypoints_matrix, get_idxs_and_kps_from_result,
+    replace_zeros_with_keypoints_mask)
 from crowdstream.cv.utils.keypoint import Keypoint
 
 
