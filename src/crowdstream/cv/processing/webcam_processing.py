@@ -4,19 +4,16 @@ import cv2
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
 
-from crowdstream.cv.signal_processing import (SignalContainer,
-                                              get_idxs_and_kps_from_result)
-from crowdstream.cv.utils import Keypoint
+from crowdstream.cv.signal.matrix_ops import get_idxs_and_kps_from_result
+from crowdstream.cv.signal.signal_container import SignalContainer
+from crowdstream.cv.utils.keypoint import Keypoint
 
 # INPUTS 
 
+colors = ["red", "green", "blue"]
 KEYPOINTS = [9, 10, 11]
+IDXS = "ALL"
 #KEYPOINTS = [Keypoint(k) for k in KEYPOINTS]
-
-
-
-
-
 
 ## OPEN CV PIPELINE ------
 # Open the default camera
@@ -30,7 +27,6 @@ frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
 model = YOLO("models/yolov8n-pose.pt")
 
 signal_container = SignalContainer()
-
 
 plt.ion()  # turning interactive mode on
 # preparing the data
@@ -72,8 +68,10 @@ while True:
             y[k].append(signal_container.signal[0, k])
         
         # plotting newer graph
-        for k in KEYPOINTS:
-            graph = plt.plot(x,y[k])[0]
+        for k, color in zip(KEYPOINTS, colors):
+            graph = plt.plot(x,y[k], color=color, label=str(Keypoint(k).name))[0]
+            plt.xlabel("Frame")
+            plt.ylabel("Signal")
         
         # calling pause function for 0.25 seconds
         plt.pause(0.1)
