@@ -10,7 +10,7 @@ from crowdstream.cv.matrix_ops import (calculate_distance_matrix,
                                        extend_keypoints_matrix,
                                        get_idxs_and_kps_from_result,
                                        replace_zeros_with_keypoints_mask)
-from crowdstream.cv.utils import Keypoint
+from crowdstream.cv.utils.keypoint import Keypoint
 
 
 @define
