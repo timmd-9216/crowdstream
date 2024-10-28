@@ -6,10 +6,11 @@ import ultralytics
 
 def get_idxs_and_kps_from_result(
     result: ultralytics.engine.results.Results #type: ignore
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray] | Tuple[None, None]:
     """
     Extracts the vector of ids (idxs) and the matrix of keypoints (kps) from a
-    Ultralytics `Results` object.
+    Ultralytics `Results` object. If the `Results` object does not contain detections
+    with ids, the function returns `None, None`.
 
     Parameters:
     ----------
@@ -30,17 +31,17 @@ def get_idxs_and_kps_from_result(
     >>> kps.shape   # Example output: (5, 17, 3)
     """
 
-    # Extract idxs using result.boxes.id, converting to a NumPy array of integers
-    idxs = result.boxes.id.numpy().astype("int")
+    if result.boxes.id is not None:
+        # Extract idxs using result.boxes.id, converting to a NumPy array of integers
+        idxs = result.boxes.id.numpy().astype("int")
 
-    # Extract keypoints using result.keypoints, converting to a NumPy array of floats
-    kps = result.keypoints.xy.numpy()
-
-
-    # TODO Revisar acá y ver que devolver si no tiene detecciones.
-    # Asegúrate de que los objetos boxes.id y keypoints existan en el objeto result. Si pueden estar ausentes en algunas ejecuciones, podrías necesitar manejar esos casos con verificaciones adicionales.
-
-    return idxs, kps
+        # Extract keypoints using result.keypoints, converting to a NumPy array of floats
+        kps = result.keypoints.xy.numpy()
+        
+        return idxs, kps
+        
+    else:
+        return None, None
 
 
 
