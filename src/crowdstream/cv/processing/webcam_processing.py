@@ -1,4 +1,5 @@
 import random
+from typing import Optional
 
 import cv2
 import matplotlib.pyplot as plt
@@ -8,121 +9,211 @@ from crowdstream.cv.signal.matrix_ops import get_idxs_and_kps_from_result
 from crowdstream.cv.signal.signal_container import SignalContainer
 from crowdstream.cv.utils.keypoint import Keypoint
 
-# INPUTS 
 
-colors = ["red", "green", "blue"]
-KEYPOINTS = [9, 10, 11]
-IDXS = "ALL"
-#KEYPOINTS = [Keypoint(k) for k in KEYPOINTS]
-
-## OPEN CV PIPELINE ------
-# Open the default camera
-cam = cv2.VideoCapture(0)
-
-# Get the default frame width and height
-frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
-frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-# Load a model
-model = YOLO("models/yolov8n-pose.pt")
-
-signal_container = SignalContainer()
-
-plt.ion()  # turning interactive mode on
-# preparing the data
+def webcam_processing(considered_indexes: Optional[list[int]], considered_keypoints: Optional[list[Keypoint]], max_signal_len: int):
 
 
-y = {k: [0] for k in KEYPOINTS}
-x = [0]
- 
-# plotting the first frame
-graph = plt.plot(x,y[list(y.keys())[0]])[0]
-# plt.ylim(0,100)
-#plt.pause(1)
+    ## OPEN CV PIPELINE ------
+    # Open the default camera
+    cam = cv2.VideoCapture(0)
 
-# # Define the codec and create VideoWriter object
-# fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-# out = cv2.VideoWriter('output.mp4', fourcc, 20.0, (frame_width, frame_height))
+    # Get the default frame width and height
+    frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-while True:
+    # Load a model
+    model = YOLO("models/yolov8n-pose.pt")
+
+    signal_container = SignalContainer(considered_indexes=considered_indexes, considered_keypoints=considered_keypoints, max_signal_len=max_signal_len)
+
+
+
+    plt.ion()  # turning interactive mode on
+
+    x = [0]
+    y = [0.0]
+
+    # Set up initial plot and legend outside the loop
+    fig, ax = plt.subplots()
     
-    ret, frame = cam.read()
+    line, = ax.plot([], [], color="green", label="Energy")
 
-    # # Write the frame to the output file
-    # out.write(frame)
-    
-    r = model.track(source=frame, persist=True, stream=False, verbose=False)
-    annotated_frame = r[0].plot()
-    
-    new_idxs, new_keypoints = get_idxs_and_kps_from_result(r[0])
-
-    signal_container.update(new_idxs, new_keypoints)
-    
-    try:
-        print(signal_container.signal[0, 10])
-        # removing the older graph
-        graph.remove()
+    # Show the legend only once
+    plt.xlabel("Frame")
+    plt.ylabel("Signal")
+    plt.legend(loc="upper right")
         
-        x.append(signal_container.frame_id)
-        for k in KEYPOINTS:
-            y[k].append(signal_container.signal[0, k])
-        
-        # plotting newer graph
-        for k, color in zip(KEYPOINTS, colors):
-            graph = plt.plot(x,y[k], color=color, label=str(Keypoint(k).name))[0]
-            plt.xlabel("Frame")
-            plt.ylabel("Signal")
-        
-        # calling pause function for 0.25 seconds
-        plt.pause(0.1)
-        # plt.xlim(x[0], x[-1])
-        
-    except:
-        pass
 
-    #Display the captured frame
-    cv2.imshow('Camera', annotated_frame)
+    while True:
+        
+        # Capture the frame
+        ret, frame = cam.read()
+        
+        # Run the model on the frame and get the result
+        r = model.track(source=frame, persist=True, stream=False, verbose=False)
+        annotated_frame = r[0].plot()
+        
+        # Get the new indexes and keypoints from the result
+        new_idxs, new_keypoints = get_idxs_and_kps_from_result(r[0])
+
+        # Update the signal container with the new data
+        signal_container.update(new_idxs, new_keypoints)
+        
+        try:
+        
+            print(signal_container.signal[-1])        
+        
+            # Update the x data with the new frame id
+            x.append(signal_container.frame_id)  
+            # Add the new signal value to the corresponding keypoint list
+            y.append(signal_container.signal[-1])
+             # Update the line data for the keypoint
+            line.set_data(x, y)
+            
+            # Adjust plot limits
+            ax.relim()
+            ax.autoscale_view()
+            
+            # Show plot
+            plt.show()
+            plt.pause(0.005)
+            
+        except:
+            pass
+
+        #Display the captured frame
+        cv2.imshow('Camera', annotated_frame)
+        
+        # Press 'q' to exit the loop
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+    # Release the capture and writer objects
+    cam.release()
+    cv2.destroyAllWindows()
     
-    # Press 'q' to exit the loop
-    if cv2.waitKey(1) == ord('q'):
-        break
-
-# Release the capture and writer objects
-cam.release()
-cv2.destroyAllWindows()
 
 
+def generate_colors(values, cmap_name='viridis'):
+    """
+    Generates a list of colors based on the input values using a colormap.
+
+    Parameters:
+    values (list): List of values for which to generate colors.
+    cmap_name (str): Name of the colormap to use (default is 'viridis').
+
+    Returns:
+    list: List of color hex codes with the same size as values.
+    """
+    cmap = plt.cm.get_cmap(cmap_name, len(values))
+    colors = [cmap(i) for i in range(len(values))]
+    return colors
 
 
 
+    
+def webcam_processing_multikeypoint(considered_indexes: Optional[list[int]], considered_keypoints: Optional[list[Keypoint]], max_signal_len: int) -> None:
 
+    ## OPEN CV PIPELINE ------
+    # Open the default camera
+    cam = cv2.VideoCapture(0)
 
- 
-# plt.ion()  # turning interactive mode on
- 
-# # preparing the data
-# y = [random.randint(1,10) for i in range(20)]
-# x = [*range(1,21)]
- 
-# # plotting the first frame
-# graph = plt.plot(x,y)[0]
-# plt.ylim(0,10)
-# plt.pause(1)
- 
-# # the update loop
-# while(True):
-#     # updating the data
-#     y.append(random.randint(1,10))
-#     x.append(x[-1]+1)
+    # Get the default frame width and height
+    frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    # Load a model
+    model = YOLO("models/yolov8n-pose.pt")
+
+    # Init the signal container
+    signal_container = SignalContainer(considered_indexes=considered_indexes, considered_keypoints=considered_keypoints, max_signal_len=max_signal_len)
+
+    # If no keypoints are provided, use all keypoints
+    if considered_keypoints is None:
+        considered_keypoints = [k for k in Keypoint]
      
-#     # removing the older graph
-#     graph.remove()
      
-#     # plotting newer graph
-#     graph = plt.plot(x,y,color = 'g')[0]
-#     plt.xlim(x[0], x[-1])
-     
-#     # calling pause function for 0.25 seconds
-#     plt.pause(0.25)
+    plt.ion()  # turning interactive mode on
     
+    x = [0]
+    y = {k.name: [0.0] for k in considered_keypoints}
+    colors = generate_colors(considered_keypoints, cmap_name='jet')
+    
+    # Set up initial plot and legend outside the loop
+    fig, ax = plt.subplots()
+    lines = {}
+    for k, color in zip(considered_keypoints, colors):
+        # Create a line for each keypoint with a label and store it in the dictionary
+        line, = ax.plot([], [], color=color, label=k.name)
+        lines[k.name] = line
+
+    # Show the legend only once
+    plt.xlabel("Frame")
+    plt.ylabel("Signal")
+    plt.legend(loc="upper right")
+        
+    while True:
+        
+        # Capture the frame
+        ret, frame = cam.read()
+        
+        # Run the model on the frame and get the result
+        r = model.track(source=frame, persist=True, stream=False, verbose=False)
+        annotated_frame = r[0].plot()
+        
+        # Get the new indexes and keypoints from the result
+        new_idxs, new_keypoints = get_idxs_and_kps_from_result(r[0])
+
+        # Update the signal container with the new data
+        signal_container.update(new_idxs, new_keypoints)
+        
+        try:
+        
+            print(signal_container.signal[-1])
+            
+            # Update the x data with the new frame id
+            x.append(signal_container.frame_id)  
+        
+            for k in considered_keypoints:
+                # Add the new signal value to the corresponding keypoint list
+                y[k.name].append(float(signal_container.signals_matrix[-1][0, k.value]))
+                # Update the line data for the keypoint
+                lines[k.name].set_data(x, y[k.name])
+            
+            # Adjust plot limits
+            ax.relim()
+            ax.autoscale_view()
+            
+            # Show plot
+            plt.show()
+            plt.pause(0.005)
+            
+        except:
+            pass
+
+        #Display the captured frame
+        cv2.imshow('Camera', annotated_frame)
+        
+        # Press 'q' to exit the loop
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+    # Release the capture and writer objects
+    cam.release()
+    cv2.destroyAllWindows()
+
+
+
+
+if __name__ == "__main__":
+    
+    considered_indexes = None
+    selected_keypoints = [Keypoint.Nose, Keypoint.LeftWrist, Keypoint.RightWrist]
+    max_signal_len = 10000
+    
+    webcam_processing(considered_indexes, selected_keypoints, max_signal_len)
+    
+    #webcam_processing_multikeypoint(considered_indexes, selected_keypoints, max_signal_len)
+
+
     
