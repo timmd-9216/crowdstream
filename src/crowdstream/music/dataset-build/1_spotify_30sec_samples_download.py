@@ -75,7 +75,8 @@ class SpotifyHandler:
 
         self.artist_catalogue = {'Angeles Azules': '0ZCO8oVkMj897cKgFH7fRW',
                     'Los Mirlos':'1ga48mxYYI9RuUrWLa3voh',
-                    'Antonio Rios':'7s652lD4v77szrPEfgMTBi'}
+                    'Antonio Rios':'7s652lD4v77szrPEfgMTBi',
+                     'Los Piojos':'0SnyKkoyBaB2fG8IJH4xmU'}
 
 
     def save_artist_track_data(self,artist):
@@ -308,16 +309,15 @@ if __name__ == "__main__":
 
     print("WARNING: artist_catalogue hardcodeado")
 
-        # self.artist_catalogue = {'Angeles Azules': '0ZCO8oVkMj897cKgFH7fRW',
-        #             'Los Mirlos':'1ga48mxYYI9RuUrWLa3voh',
-        #             'Antonio Rios':'7s652lD4v77szrPEfgMTBi'}
+    artist_catalogue = {#'Angeles Azules': '0ZCO8oVkMj897cKgFH7fRW',
+                     #'Los Mirlos':'1ga48mxYYI9RuUrWLa3voh',
+                     #'Antonio Rios':'7s652lD4v77szrPEfgMTBi',
+                     'Los Piojos':'0SnyKkoyBaB2fG8IJH4xmU'}
 
+    for k in artist_catalogue:
+        spotify_handler.save_artist_track_data(k)  # Example usage
+        spotify_handler.save_artist_sample_audio(k)  # Example usage
 
-    spotify_handler.save_artist_track_data('Angeles Azules')  # Example usage
-    spotify_handler.save_artist_sample_audio('Angeles Azules')  # Example usage
-
-    spotify_handler.save_artist_track_data('Los Mirlos')  # Example usage
-    spotify_handler.save_artist_sample_audio('Los Mirlos')  # Example usage
 
     # # Parse XML and read CSV files
     # base_path = 'TIMMD/music/sample_audio/'

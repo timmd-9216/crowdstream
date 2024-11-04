@@ -168,4 +168,4 @@ models/
 *.pt
 
 # Ignore data
-data/
+data/.DS_Store
