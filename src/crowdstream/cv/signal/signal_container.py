@@ -56,7 +56,6 @@ class SignalContainer:
     #     A NumPy array representing the idx vector for the new step keypoints (initially None).
     # """
     
-    considered_indexes: Optional[list[int]] = field(factory=list)
     considered_keypoints: list[list[int]] = field(factory=list, converter=lambda x: _keypoint_converter(x))
     max_signal_len: int = 100
 
@@ -102,7 +101,7 @@ class SignalContainer:
             self._new_keypoints = create_new_keypoints_matrix(self._new_idxs, self._new_keypoints, 1)
 
 
-    def update_signal(self, considered_indexes: Optional[list[int]], considered_keypoints: list[list[int]]) -> None:
+    def update_signal(self, considered_keypoints: list[list[int]]) -> None:
         """
         Actualiza la matriz de señales calculando las distancias entre los keypoints actuales y los nuevos keypoints.
         
@@ -119,11 +118,9 @@ class SignalContainer:
             self.signal_frame_log.append(self.frame_id)
             
             # Calculamos la señal agregada de la matriz de señales usando los índices y keypoints considerados.
-            if considered_indexes is None:
-                self.signal.append(float(np.mean(current_signal_matrix[:, considered_keypoints])))
-            else:
-                considered_indexes = [i for i in considered_indexes if i < current_signal_matrix.shape[0]]
-                self.signal.append(float(np.mean(current_signal_matrix[considered_indexes, considered_keypoints])))
+            filtered_signals = current_signal_matrix[:, considered_keypoints].max(axis=1)
+            filtered_signals = filtered_signals[filtered_signals > 0]
+            self.signal.append(float(np.sum(filtered_signals)))
             
     def update_keypoints(self) -> None:
         """
@@ -167,7 +164,7 @@ class SignalContainer:
         self.preprocess_data()
 
         # Update the signal and keypoints
-        self.update_signal(considered_indexes=self.considered_indexes, considered_keypoints=self.considered_keypoints)
+        self.update_signal(considered_keypoints=self.considered_keypoints)
         
         # Update current keypoints to be the new keypoints
         self.update_keypoints()

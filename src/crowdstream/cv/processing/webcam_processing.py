@@ -10,7 +10,7 @@ from crowdstream.cv.signal.signal_container import SignalContainer
 from crowdstream.cv.utils.keypoint import Keypoint
 
 
-def webcam_processing(considered_indexes: Optional[list[int]], considered_keypoints: Optional[list[Keypoint]], max_signal_len: int):
+def webcam_processing(considered_keypoints: Optional[list[Keypoint]], max_signal_len: int):
 
 
     ## OPEN CV PIPELINE ------
@@ -24,7 +24,7 @@ def webcam_processing(considered_indexes: Optional[list[int]], considered_keypoi
     # Load a model
     model = YOLO("models/yolov8n-pose.pt")
 
-    signal_container = SignalContainer(considered_indexes=considered_indexes, considered_keypoints=considered_keypoints, max_signal_len=max_signal_len)
+    signal_container = SignalContainer(considered_keypoints=considered_keypoints, max_signal_len=max_signal_len)
 
 
 
@@ -112,7 +112,7 @@ def generate_colors(values, cmap_name='viridis'):
 
 
     
-def webcam_processing_multikeypoint(considered_indexes: Optional[list[int]], considered_keypoints: Optional[list[Keypoint]], max_signal_len: int) -> None:
+def webcam_processing_multikeypoint(considered_keypoints: Optional[list[Keypoint]], max_signal_len: int) -> None:
 
     ## OPEN CV PIPELINE ------
     # Open the default camera
@@ -126,7 +126,7 @@ def webcam_processing_multikeypoint(considered_indexes: Optional[list[int]], con
     model = YOLO("models/yolov8n-pose.pt")
 
     # Init the signal container
-    signal_container = SignalContainer(considered_indexes=considered_indexes, considered_keypoints=considered_keypoints, max_signal_len=max_signal_len)
+    signal_container = SignalContainer(considered_keypoints=considered_keypoints, max_signal_len=max_signal_len)
 
     # If no keypoints are provided, use all keypoints
     if considered_keypoints is None:
@@ -207,11 +207,10 @@ def webcam_processing_multikeypoint(considered_indexes: Optional[list[int]], con
 
 if __name__ == "__main__":
     
-    considered_indexes = None
     selected_keypoints = [Keypoint.Nose, Keypoint.LeftWrist, Keypoint.RightWrist]
     max_signal_len = 10000
     
-    webcam_processing(considered_indexes, selected_keypoints, max_signal_len)
+    webcam_processing(selected_keypoints, max_signal_len)
     
     #webcam_processing_multikeypoint(considered_indexes, selected_keypoints, max_signal_len)
 
