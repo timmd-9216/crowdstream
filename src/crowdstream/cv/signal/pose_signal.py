@@ -1,8 +1,6 @@
-import pickle
 from typing import Optional
 
 import numpy as np
-import pandas as pd
 from attrs import define, field
 
 from crowdstream.cv.signal.matrix_ops import (
@@ -34,7 +32,7 @@ def _keypoint_converter(x: Optional[list]) -> list[list[int]]:
 
 
 @define
-class SignalContainer:
+class PoseSignalContainer:
     # """
     # A class that manages signal updates, keypoints, and frame tracking across steps.
 
@@ -202,32 +200,3 @@ class SignalContainer:
 
 
 
-def get_signals_dataframe(signal_container: SignalContainer, df_format: str = "long") -> pd.DataFrame:
-    
-    if df_format not in ["long", "wide"]:
-        raise ValueError("df_format must be either 'long' or 'wide'.")
-
-    df = []
-
-    for i in range(len(signal_container.signal_frame_log)):
-        
-        _df = pd.DataFrame(signal_container.signals_matrix[i], columns=[Keypoint(j).name for j in range(17)])
-        _df = _df.reset_index(names="idx").assign(frame=signal_container.signal_frame_log[i], idx = lambda x: x.idx + 1)
-        
-        df.append(_df)
-        
-    df = pd.concat(df)
-    
-    if df_format == "wide":
-        return df
-    
-    else:
-        df_long = df.melt(id_vars=["idx", "frame"], var_name="keypoint", value_name="value")
-        return df_long
-    
-    
-def get_signal_dataframe(signal_container: SignalContainer) -> pd.DataFrame:
-    
-    df = pd.DataFrame({"frame": signal_container.signal_frame_log, "signal": signal_container.signal})
-    
-    return df
