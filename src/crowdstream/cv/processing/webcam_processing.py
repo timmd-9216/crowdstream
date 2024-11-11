@@ -5,12 +5,13 @@ import cv2
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
 
+from crowdstream.cv.signal.diff_signal import DiffSignalContainer
 from crowdstream.cv.signal.matrix_ops import get_idxs_and_kps_from_result
-from crowdstream.cv.signal.signal_container import SignalContainer
+from crowdstream.cv.signal.pose_signal import PoseSignalContainer
 from crowdstream.cv.utils.keypoint import Keypoint
 
 
-def webcam_processing(considered_keypoints: Optional[list[Keypoint]], max_signal_len: int):
+def webcam_processing(signal_container: PoseSignalContainer | DiffSignalContainer) -> None:
 
 
     ## OPEN CV PIPELINE ------
@@ -22,12 +23,10 @@ def webcam_processing(considered_keypoints: Optional[list[Keypoint]], max_signal
     frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     # Load a model
-    model = YOLO("models/yolov8n-pose.pt")
+    if isinstance(signal_container, PoseSignalContainer):
+        model = YOLO("models/yolov8n-pose.pt")
 
-    signal_container = SignalContainer(considered_keypoints=considered_keypoints, max_signal_len=max_signal_len)
-
-
-
+    # Plotting
     plt.ion()  # turning interactive mode on
 
     x = [0]
@@ -49,15 +48,21 @@ def webcam_processing(considered_keypoints: Optional[list[Keypoint]], max_signal
         # Capture the frame
         ret, frame = cam.read()
         
-        # Run the model on the frame and get the result
-        r = model.track(source=frame, persist=True, stream=False, verbose=False)
-        annotated_frame = r[0].plot()
-        
-        # Get the new indexes and keypoints from the result
-        new_idxs, new_keypoints = get_idxs_and_kps_from_result(r[0])
+        if isinstance(signal_container, PoseSignalContainer):
+            # Run the model on the frame and get the result
+            r = model.track(source=frame, persist=True, stream=False, verbose=False)
+            annotated_frame = r[0].plot()
+            
+            # Get the new indexes and keypoints from the result
+            new_idxs, new_keypoints = get_idxs_and_kps_from_result(r[0])
 
-        # Update the signal container with the new data
-        signal_container.update(new_idxs, new_keypoints)
+            # Update the signal container with the new data
+            signal_container.update(new_idxs, new_keypoints)
+        
+        else:
+            signal_container.update(frame)
+            annotated_frame = signal_container.diff_matrix if signal_container.diff_matrix is not None else frame
+        
         
         try:
         
@@ -112,7 +117,7 @@ def generate_colors(values, cmap_name='viridis'):
 
 
     
-def webcam_processing_multikeypoint(considered_keypoints: Optional[list[Keypoint]], max_signal_len: int) -> None:
+def webcam_processing_multikeypoint(signal_container: PoseSignalContainer) -> None:
 
     ## OPEN CV PIPELINE ------
     # Open the default camera
@@ -125,13 +130,8 @@ def webcam_processing_multikeypoint(considered_keypoints: Optional[list[Keypoint
     # Load a model
     model = YOLO("models/yolov8n-pose.pt")
 
-    # Init the signal container
-    signal_container = SignalContainer(considered_keypoints=considered_keypoints, max_signal_len=max_signal_len)
-
     # If no keypoints are provided, use all keypoints
-    if considered_keypoints is None:
-        considered_keypoints = [k for k in Keypoint]
-     
+    considered_keypoints = [Keypoint(i[0]) for i in signal_container.considered_keypoints]     
      
     plt.ion()  # turning interactive mode on
     
@@ -182,6 +182,7 @@ def webcam_processing_multikeypoint(considered_keypoints: Optional[list[Keypoint
             
             # Adjust plot limits
             ax.relim()
+            ax.set_ylim((0,500))
             ax.autoscale_view()
             
             # Show plot
@@ -210,9 +211,13 @@ if __name__ == "__main__":
     selected_keypoints = [Keypoint.Nose, Keypoint.LeftWrist, Keypoint.RightWrist]
     max_signal_len = 10000
     
-    webcam_processing(selected_keypoints, max_signal_len)
+    signal_container = PoseSignalContainer(considered_keypoints=selected_keypoints, max_signal_len=max_signal_len)
     
-    #webcam_processing_multikeypoint(considered_indexes, selected_keypoints, max_signal_len)
+    #signal_container = DiffSignalContainer(max_signal_len=max_signal_len)
+    
+    webcam_processing(signal_container)
+    
+    #webcam_processing_multikeypoint(signal_container)
 
 
     
