@@ -9,4 +9,4 @@ El directorio `data` debe contener los siguientes subdirectorios:
 
 Los videos de demo usados se pueden descargar de [demo data](https://drive.google.com/drive/u/4/folders/1GMU_CvWpG4gZym7t1xUWhN_kysXQBIrD).
 
-El directorio `models` contiene el modelo de estimación de pose utilizado. En caso de correr el script `video_processing.py` se descargará automáticamente.
+El directorio `models` contiene el modelo de estimación de pose utilizado. En caso de correr el script `video_processing.py` o `webcam_processing.py` se descargará automáticamente.
