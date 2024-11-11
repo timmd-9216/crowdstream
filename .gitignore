@@ -169,3 +169,4 @@ models/
 
 # Ignore data
 data/.DS_Store
+data/
