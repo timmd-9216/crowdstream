@@ -1,10 +1,9 @@
 import numpy as np
 import pytest
 
-from crowdstream.cv.matrix_ops import (calculate_distance_matrix,
-                                       create_new_keypoints_matrix,
-                                       extend_keypoints_matrix,
-                                       replace_zeros_with_keypoints_mask)
+from crowdstream.cv.signal.matrix_ops import (
+    calculate_distance_matrix, create_new_keypoints_matrix,
+    extend_keypoints_matrix, replace_zeros_with_keypoints_mask)
 
 
 def test_create_new_keypoints_matrix_default():
