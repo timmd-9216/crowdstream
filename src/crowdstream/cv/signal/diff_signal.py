@@ -10,11 +10,10 @@ class DiffSignalContainer:
     
     max_signal_len: int = 100
     
-    
     signal_frame_log: list[int] = field(factory=list, init=False)
     signal: list[float] = field(factory=list, init=False)
-    diff_matrix: Optional[np.ndarray] = None
-    frame: Optional[np.ndarray] = None
+    diff_matrix: Optional[np.ndarray] = field(default=None, init=False)
+    frame: Optional[np.ndarray] = field(default=None, init=False)
     frame_id: int = field(default=-1, init=False)
             
     def update_signal(self, new_frame: Optional[np.ndarray]) -> None:
