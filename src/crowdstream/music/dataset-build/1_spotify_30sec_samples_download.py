@@ -11,6 +11,13 @@ import xml.etree.ElementTree as ET
 import librosa
 import io
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+ARTIST_CATALOGUE = 'artist_catalogue.json'
+
 def process_audio_files(directory='sample_audio/loops', track_metadata_csv='track_metadata.csv', 
         output_csv='loops_metadata.csv'):
     # Step 1: List all files in the directory
@@ -71,13 +78,6 @@ class SpotifyHandler:
     def __init__(self, client_id, client_secret):
         self.client_credentials_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         self.sp = spotipy.Spotify(client_credentials_manager=self.client_credentials_manager)
-
-
-        self.artist_catalogue = {'Angeles Azules': '0ZCO8oVkMj897cKgFH7fRW',
-                    'Los Mirlos':'1ga48mxYYI9RuUrWLa3voh',
-                    'Antonio Rios':'7s652lD4v77szrPEfgMTBi',
-                     'Los Piojos':'0SnyKkoyBaB2fG8IJH4xmU'}
-
 
     def save_artist_track_data(self,artist):
         birdy_uri = self.artist_catalogue[artist]
@@ -296,8 +296,6 @@ class AudioProcessor:
         return pd.read_csv(csv_path)
 
 
-
-# Example usage
 if __name__ == "__main__":
     client_id = os.getenv('SPOTIPY_CLIENT_ID')
     client_secret = os.getenv('SPOTIPY_CLIENT_SECRET')
@@ -305,50 +303,16 @@ if __name__ == "__main__":
     if not client_id or not client_secret:
         raise ValueError("Please set the SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET environment variables.")
 
+
+    print(f"Reading artist catalogue from {ARTIST_CATALOGUE}")
+
+    # Load artist_catalogue from JSON file
+    with open(ARTIST_CATALOGUE, 'r', encoding='utf-8') as file:
+        artist_catalogue = json.load(file)
+
     spotify_handler = SpotifyHandler(client_id, client_secret)
-
-    print("WARNING: artist_catalogue hardcodeado")
-
-    artist_catalogue = {#'Angeles Azules': '0ZCO8oVkMj897cKgFH7fRW',
-                     #'Los Mirlos':'1ga48mxYYI9RuUrWLa3voh',
-                     #'Antonio Rios':'7s652lD4v77szrPEfgMTBi',
-                     'Los Piojos':'0SnyKkoyBaB2fG8IJH4xmU'}
+    spotify_handler.artist_catalogue = artist_catalogue
 
     for k in artist_catalogue:
-        spotify_handler.save_artist_track_data(k)  # Example usage
-        spotify_handler.save_artist_sample_audio(k)  # Example usage
-
-
-    # # Parse XML and read CSV files
-    # base_path = 'TIMMD/music/sample_audio/'
-    # xml_path = 'rekordbox/collection.xml'
-    # track_df = AudioProcessor.parse_rekordbox_xml(xml_path)
-    # #track_df[track_df['Location'].str.startswith(base_path)]
-    # tempo_csv_path = 'tempo_metadata.csv'
-    # tempo_df = AudioProcessor.read_csv(tempo_csv_path)
-
-    # # Create an AudioProcessor instance
-    # audio_processor = AudioProcessor(base_path, track_df, tempo_df)
-    # # Example extraction
-    # #track_name = 'spotify-track-0tvaWhHlhewQ6ovIwn6wnX'  # Replace with the track name you want to process
-    # # Find all tracks that meet the criteria
-    # lower_bpm = 120
-    # upper_bpm = 124
-    # matching_tracks = tempo_df.groupby('TrackID').filter(lambda x: len(x) == 1)
-    # matching_tracks = matching_tracks[(matching_tracks['Bpm'] >= lower_bpm) & (matching_tracks['Bpm'] <= upper_bpm)]
-    # matching_tracks = matching_tracks[matching_tracks['Name'].str.startswith('spotify-track-')]
-    # # Get the file names
-    # file_names = matching_tracks['Name']
-    # #track_name = 'spotify-track-7GNBiHP71dMz18dCIksjSB'
-    # output_path = 'sample_audio/loops_wav'  # Replace with your desired output directory
-    # adjustment = -0.05  # Adjust this value as needed
-    
-    
-    # for f in file_names:
-    #     print(f)
-    #     audio_processor.extract_segment(f, output_path, adjustment, looped=True)
-    
-    #process_audio_files(directory='sample_audio/loops_wav', track_metadata_csv='track_metadata.csv', 
-    #    output_csv='loops_metadata_wav.csv')
-
-
+        spotify_handler.save_artist_track_data(k)  # track_data/artist_name/artist_uri.json
+        spotify_handler.save_artist_sample_audio(k)  #
