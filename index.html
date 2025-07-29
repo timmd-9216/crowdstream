@@ -17,6 +17,12 @@
       max-width: 100%;
       display: block;
       margin: 30px auto;
+      animation: pulse 4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.03); opacity: 0.95; }
     }
   </style>
 </head>
