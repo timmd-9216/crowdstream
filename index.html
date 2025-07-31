@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Crowdstream</title>
@@ -10,80 +11,115 @@
       color: #333;
       padding: 20px;
     }
+
     .container {
       max-width: 800px;
       margin: auto;
       background: #fff;
       padding: 20px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     }
+
     h1 {
       text-align: center;
       margin-bottom: 5px;
     }
+
     .subtitle {
       text-align: center;
       color: #666;
       margin-top: 0;
     }
+
     .diagram {
       max-width: 100%;
       display: block;
       margin: 30px auto;
       animation: pulse 4s ease-in-out infinite;
     }
+
     .section {
       margin-top: 40px;
     }
+
     .section h2 {
       border-bottom: 1px solid #eaeaea;
       padding-bottom: 5px;
       margin-bottom: 15px;
       font-weight: normal;
     }
-    .sensing-images {
+
+    /* .sensing-images {
       display: flex;
       flex-wrap: wrap;
       justify-content: space-between;
     }
+
     .sensing-images img {
       max-width: 48%;
       margin-bottom: 20px;
       border-radius: 4px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    } */
+
+    .sensing-images {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
+
+    .sensing-images img {
+      max-width: 80%;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
     @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.03); opacity: 0.95; }
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      50% {
+        transform: scale(1.03);
+        opacity: 0.95;
+      }
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <h1>Crowdstream</h1>
     <p class="subtitle">Synthesized Co-Creation of Music with AI + Audience</p>
-    <img class="diagram"
-         src="https://www.columbia.edu/~xig2000/sintesisColectiva/media/diagramaDji.jpg"
-         alt="Crowdstream Diagram">
+    <img class="diagram" src="https://www.columbia.edu/~xig2000/sintesisColectiva/media/diagramaDji.jpg"
+      alt="Crowdstream Diagram">
 
     <div class="section">
       <h2>Sensing the Audience</h2>
-      <p>Crowdstream reads signals from audience movements and emotions, interpreting body language and facial cues to gauge energy and sentiment in real time.</p>
+      <p>Crowdstream reads signals from audience movements and emotions, interpreting body language and facial cues to
+        gauge energy and sentiment in real time.</p>
       <div class="sensing-images">
         <!-- replace these with your emotion-detection and pose-detection image URLs -->
-        <img src="URL_TO_EMOTION_DETECTION_IMAGE" alt="Emotion Detection Diagram">
-        <img src="URL_TO_POSE_DETECTION_IMAGE"   alt="Pose Detection Diagram">
+        <img src="assets/pose_estimation.png" alt="Pose Detection">
+        <!-- <img src="assets/emotion_estimation.png" alt="Emoupdate tion Detection"> -->
+        <img src="assets/signal_plot.png" alt="Energy Signal">
       </div>
     </div>
 
     <div class="section">
       <h2>Generating Music</h2>
-      <p>AI tools generate or remix music dynamically based on audience input and environmental cues, creating an adaptive and expressive musical experience.</p>
+      <p>AI tools generate or remix music dynamically based on audience input and environmental cues, creating an
+        adaptive and expressive musical experience.</p>
     </div>
 
     <div class="section">
       <h2>Audience as Composer</h2>
-      <p>Listeners aren’t just passive — their presence, reactions, and inputs help shape the music. Crowdstream treats the audience as co-creators in the artistic process.</p>
+      <p>Listeners aren’t just passive — their presence, reactions, and inputs help shape the music. Crowdstream treats
+        the audience as co-creators in the artistic process.</p>
     </div>
 
     <p style="text-align: center; margin-top: 40px;">
@@ -91,4 +127,5 @@
     </p>
   </div>
 </body>
+
 </html>
