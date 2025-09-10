@@ -9,7 +9,37 @@ https://youtu.be/1cXhiNixB_o
 
 Check the full [CrowdStream](https://timmd-9216.github.io/crowdstream/) project for another experimental uses and details.
 
-## 🚀 **Latest Features - SuperCollider Integration**
+
+## Features Added:
+
+  1. Beat Quantization System
+    - Master timeline with global beat tracking
+    - Quantized stem loading waits for next beat boundary
+    - Configurable resolution: 1, 2, 4, or 8 beats
+  2. Instant Playback Methods
+    - instant.<stem> <song> - immediate playback with looping
+    - sample.<stem> <song> - one-shot samples without looping
+    - sync on/off - enable/disable quantization
+    - quantize <1|2|4|8> - set resolution
+    - sync status - show current sync state
+  3. Smart Timing Logic
+    - Default: beat-quantized loading for tight mixes
+    - Override: instant modes for manual timing control
+    - Threading-based delayed execution for perfect timing
+
+  How It Works:
+
+  - Quantized Mode (Default): When you load a stem with a.bass 2, it calculates
+  the delay until the next beat boundary and schedules playback
+  - Instant Mode: Commands like instant.bass 2 bypass timing and play immediately
+  - Sample Mode: Commands like sample.vocals 1 fire one-shot sounds instantly
+  without looping
+
+  The system provides professional DJ-style synchronization while maintaining the
+  flexibility for creative timing control.
+
+---
+** Features
 
 - **Real-Time Audio Mixing**: Live stem playback via SuperCollider audio server
 - **Smart Memory Loading**: Only loads stems when playing (optimized for 16GB RAM)
