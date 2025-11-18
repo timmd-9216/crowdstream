@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dance Movement Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🕺 Dance Movement Dashboard</h1>
+            <div class="connection-status">
+                <span id="status-indicator" class="status-dot disconnected"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Current Stats -->
+        <section class="current-stats">
+            <h2>Estado Actual</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-value" id="current-people">0</div>
+                    <div class="stat-label">Personas</div>
+                </div>
+                <div class="stat-card highlight">
+                    <div class="stat-icon">💃</div>
+                    <div class="stat-value" id="current-total">0.0</div>
+                    <div class="stat-label">Movimiento Total</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🙌</div>
+                    <div class="stat-value" id="current-arms">0.0</div>
+                    <div class="stat-label">Brazos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🦵</div>
+                    <div class="stat-value" id="current-legs">0.0</div>
+                    <div class="stat-label">Piernas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🗣️</div>
+                    <div class="stat-value" id="current-head">0.0</div>
+                    <div class="stat-label">Cabeza</div>
+                </div>
+            </div>
+            <div class="timestamp">
+                Última actualización: <span id="last-update">--:--:--</span>
+            </div>
+        </section>
+
+        <!-- Cumulative Stats -->
+        <section class="cumulative-stats">
+            <div class="section-header">
+                <h2>Estadísticas Acumuladas</h2>
+                <button id="reset-btn" class="reset-button">Reiniciar</button>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Mensajes</div>
+                    <div class="stat-value small" id="cum-messages">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Promedio Personas</div>
+                    <div class="stat-value small" id="cum-avg-people">0.0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Máximo Personas</div>
+                    <div class="stat-value small" id="cum-max-people">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Promedio Movimiento</div>
+                    <div class="stat-value small" id="cum-avg-total">0.0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Máximo Movimiento</div>
+                    <div class="stat-value small" id="cum-max-total">0.0</div>
+                </div>
+            </div>
+            <div class="detail-stats">
+                <div class="detail-row">
+                    <span class="label">Brazos:</span>
+                    <span>Promedio: <strong id="cum-avg-arms">0.0</strong></span>
+                    <span>Máximo: <strong id="cum-max-arms">0.0</strong></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Piernas:</span>
+                    <span>Promedio: <strong id="cum-avg-legs">0.0</strong></span>
+                    <span>Máximo: <strong id="cum-max-legs">0.0</strong></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Cabeza:</span>
+                    <span>Promedio: <strong id="cum-avg-head">0.0</strong></span>
+                    <span>Máximo: <strong id="cum-max-head">0.0</strong></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts -->
+        <section class="charts">
+            <h2>Historial de Movimiento</h2>
+            <div class="chart-container">
+                <canvas id="movementChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="bodyPartsChart"></canvas>
+            </div>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
