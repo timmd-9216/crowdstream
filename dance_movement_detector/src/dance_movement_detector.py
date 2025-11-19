@@ -127,11 +127,29 @@ class DanceMovementDetector:
         self.model = YOLO('yolov8n-pose.pt')  # Nano model for speed
         self.tracker = BodyPartTracker(history_size=config.get('history_frames', 10))
 
-        # OSC client for sending messages
-        self.osc_client = udp_client.SimpleUDPClient(
-            config.get('osc_host', '127.0.0.1'),
-            config.get('osc_port', 5005)
-        )
+        # OSC clients for sending messages (support multiple destinations)
+        self.osc_clients = []
+        self.osc_destinations = []
+
+        # Check if multiple destinations are configured
+        osc_destinations = config.get('osc_destinations', None)
+        if osc_destinations:
+            # Multiple destinations
+            for dest in osc_destinations:
+                client = udp_client.SimpleUDPClient(dest['host'], dest['port'])
+                self.osc_clients.append(client)
+                self.osc_destinations.append({
+                    'host': dest['host'],
+                    'port': dest['port'],
+                    'description': dest.get('description', '')
+                })
+        else:
+            # Single destination (backward compatibility)
+            host = config.get('osc_host', '127.0.0.1')
+            port = config.get('osc_port', 5005)
+            client = udp_client.SimpleUDPClient(host, port)
+            self.osc_clients.append(client)
+            self.osc_destinations.append({'host': host, 'port': port, 'description': ''})
 
         self.last_message_time = 0
         self.message_interval = config.get('message_interval', 10.0)
@@ -150,7 +168,10 @@ class DanceMovementDetector:
         print(f"Starting dance movement detection...")
         print(f"Video source: {self.video_source}")
         print(f"Message interval: {self.message_interval}s")
-        print(f"OSC destination: {self.config.get('osc_host')}:{self.config.get('osc_port')}")
+        print(f"OSC destinations ({len(self.osc_destinations)}):")
+        for i, dest in enumerate(self.osc_destinations, 1):
+            desc = f" ({dest['description']})" if dest['description'] else ""
+            print(f"  {i}. {dest['host']}:{dest['port']}{desc}")
         print("\nPress 'q' to quit\n")
 
         try:
@@ -250,15 +271,17 @@ class DanceMovementDetector:
             self._save_stats(stats)
 
     def _send_osc_messages(self, stats: MovementStats):
-        """Send movement statistics via OSC"""
+        """Send movement statistics via OSC to all destinations"""
         base_address = self.config.get('osc_base_address', '/dance')
 
-        # Convert to native Python types for OSC compatibility
-        self.osc_client.send_message(f"{base_address}/person_count", int(stats.person_count))
-        self.osc_client.send_message(f"{base_address}/total_movement", float(stats.total_movement))
-        self.osc_client.send_message(f"{base_address}/arm_movement", float(stats.arm_movement))
-        self.osc_client.send_message(f"{base_address}/leg_movement", float(stats.leg_movement))
-        self.osc_client.send_message(f"{base_address}/head_movement", float(stats.head_movement))
+        # Send to all OSC clients
+        for client in self.osc_clients:
+            # Convert to native Python types for OSC compatibility
+            client.send_message(f"{base_address}/person_count", int(stats.person_count))
+            client.send_message(f"{base_address}/total_movement", float(stats.total_movement))
+            client.send_message(f"{base_address}/arm_movement", float(stats.arm_movement))
+            client.send_message(f"{base_address}/leg_movement", float(stats.leg_movement))
+            client.send_message(f"{base_address}/head_movement", float(stats.head_movement))
 
     def _save_stats(self, stats: MovementStats):
         """Save statistics to JSON file"""
