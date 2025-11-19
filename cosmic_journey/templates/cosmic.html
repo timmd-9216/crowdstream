@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Journey</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cosmic.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <!-- Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Panel -->
+    <div id="ui-panel">
+        <div class="panel-header">
+            <h1>🌌 Viaje Cósmico</h1>
+            <div id="status" class="status disconnected">Conectando...</div>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-item">
+                <span class="stat-icon">🌀</span>
+                <div class="stat-info">
+                    <div class="stat-label">Galaxia</div>
+                    <div class="stat-value" id="galaxy-value">0.00</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">☄️</span>
+                <div class="stat-info">
+                    <div class="stat-label">Asteroides</div>
+                    <div class="stat-value" id="asteroid-value">1.00</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">🔭</span>
+                <div class="stat-info">
+                    <div class="stat-label">Zoom</div>
+                    <div class="stat-value" id="zoom-value">1.0x</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">⚡</span>
+                <div class="stat-info">
+                    <div class="stat-label">Energía</div>
+                    <div class="stat-value" id="energy-value">0%</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">☁️</span>
+                <div class="stat-info">
+                    <div class="stat-label">Nebulosas</div>
+                    <div class="stat-value" id="nebula-value">0%</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">🪐</span>
+                <div class="stat-info">
+                    <div class="stat-label">Órbitas</div>
+                    <div class="stat-value" id="orbit-value">0.00</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mapping-info">
+            <h3>Control de Movimiento</h3>
+            <ul>
+                <li><strong>Piernas</strong> → Rotación galáctica</li>
+                <li><strong>Brazos</strong> → Velocidad asteroides</li>
+                <li><strong>Cabeza</strong> → Zoom cósmico</li>
+                <li><strong>Movimiento Total</strong> → Energía y nebulosas</li>
+            </ul>
+        </div>
+
+        <div class="controls">
+            <button id="fullscreen-btn" class="control-btn">⛶ Pantalla Completa</button>
+            <button id="toggle-ui-btn" class="control-btn">🔘 Ocultar UI</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/cosmic.js') }}"></script>
+    <script>
+        // Fullscreen toggle
+        document.getElementById('fullscreen-btn').addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        // Toggle UI
+        document.getElementById('toggle-ui-btn').addEventListener('click', () => {
+            const ui = document.getElementById('ui-panel');
+            ui.style.display = ui.style.display === 'none' ? 'block' : 'none';
+        });
+    </script>
+</body>
+</html>
