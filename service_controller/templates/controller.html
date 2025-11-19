@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Controller</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/controller.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 Service Controller</h1>
+            <div class="header-actions">
+                <div class="connection-status">
+                    <span id="status-indicator" class="status-dot disconnected"></span>
+                    <span id="status-text">Conectando...</span>
+                </div>
+                <button id="start-all-btn" class="action-btn success">▶️ Iniciar Todos</button>
+                <button id="stop-all-btn" class="action-btn danger">⏹️ Detener Todos</button>
+            </div>
+        </header>
+
+        <div id="services-grid" class="services-grid">
+            <!-- Services will be dynamically added here -->
+        </div>
+
+        <!-- Log Modal -->
+        <div id="log-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="log-modal-title">Logs del Servicio</h2>
+                    <button class="close-btn" onclick="closeLogModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="log-container" class="log-container"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="refreshLogs()">🔄 Actualizar</button>
+                    <button class="btn" onclick="closeLogModal()">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/controller.js') }}"></script>
+</body>
+</html>
