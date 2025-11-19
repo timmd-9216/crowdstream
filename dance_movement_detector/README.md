@@ -86,6 +86,37 @@ Edita `config/config.json` para cambiar configuración permanente:
 }
 ```
 
+### Enviar a múltiples destinos
+
+Para enviar datos a múltiples aplicaciones simultáneamente (dashboard + visualizer), usa `config/multi_destination.json`:
+
+```json
+{
+  "video_source": 0,
+  "message_interval": 10.0,
+  "osc_destinations": [
+    {
+      "host": "127.0.0.1",
+      "port": 5005,
+      "description": "Dashboard"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 5006,
+      "description": "Visualizer"
+    }
+  ],
+  "osc_base_address": "/dance",
+  "history_frames": 10,
+  "show_video": true
+}
+```
+
+Iniciar con configuración personalizada:
+```bash
+./start.sh --config config/multi_destination.json
+```
+
 ## Ejemplo de recepción (Processing/Max/Pure Data)
 
 Los valores de movimiento son pixeles de desplazamiento promedio. Valores típicos:

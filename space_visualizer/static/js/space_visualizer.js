@@ -225,6 +225,8 @@ class SpaceVisualizer {
     }
 
     handleUpdate(data) {
+        console.log('Received update:', data);
+
         // Smoothly interpolate parameters
         this.params.speed = this.lerp(this.params.speed, data.speed, 0.1);
         this.params.colorIntensity = this.lerp(this.params.colorIntensity, data.color_intensity, 0.1);
