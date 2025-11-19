@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Journey Visualizer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/visualizer.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <!-- Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Panel -->
+    <div id="ui-panel">
+        <div class="panel-header">
+            <h1>🚀 Viaje Espacial</h1>
+            <div id="status" class="status disconnected">Conectando...</div>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-item">
+                <span class="stat-icon">⚡</span>
+                <div class="stat-info">
+                    <div class="stat-label">Velocidad</div>
+                    <div class="stat-value" id="speed-value">1.00</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">⭐</span>
+                <div class="stat-info">
+                    <div class="stat-label">Estrellas</div>
+                    <div class="stat-value" id="particles-value">1000</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">🌀</span>
+                <div class="stat-info">
+                    <div class="stat-label">Warp Drive</div>
+                    <div class="stat-value" id="warp-value">0%</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">🎨</span>
+                <div class="stat-info">
+                    <div class="stat-label">Color</div>
+                    <div class="stat-value" id="color-value">50%</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">👥</span>
+                <div class="stat-info">
+                    <div class="stat-label">Bailarines</div>
+                    <div class="stat-value" id="people-value">0</div>
+                </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-icon">🔄</span>
+                <div class="stat-info">
+                    <div class="stat-label">Rotación</div>
+                    <div class="stat-value" id="rotation-value">0.00</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mapping-info">
+            <h3>Mapeo de Movimiento</h3>
+            <ul>
+                <li><strong>Brazos</strong> → Velocidad de viaje</li>
+                <li><strong>Cabeza</strong> → Tamaño de estrellas</li>
+                <li><strong>Piernas</strong> → Rotación de cámara</li>
+                <li><strong>Movimiento Total</strong> → Color y efecto warp</li>
+                <li><strong>Personas</strong> → Densidad de estrellas</li>
+            </ul>
+        </div>
+
+        <div class="controls">
+            <button id="fullscreen-btn" class="control-btn">⛶ Pantalla Completa</button>
+            <button id="toggle-ui-btn" class="control-btn">🔘 Ocultar UI</button>
+        </div>
+    </div>
+
+    <!-- Instructions Overlay -->
+    <div id="instructions">
+        <div class="instructions-content">
+            <h2>🌌 Bienvenido al Viaje Espacial</h2>
+            <p>Los movimientos de los bailarines controlan tu viaje a través del espacio:</p>
+            <ul>
+                <li>Movimiento de brazos = Velocidad del viaje espacial</li>
+                <li>Movimiento de cabeza = Tamaño de las estrellas</li>
+                <li>Movimiento de piernas = Rotación de la vista</li>
+                <li>Más movimiento total = Colores vibrantes y warp drive</li>
+                <li>Más bailarines = Más estrellas en el cielo</li>
+            </ul>
+            <button id="start-btn" class="start-btn">Comenzar el Viaje</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/space_visualizer.js') }}"></script>
+    <script>
+        // Remove instructions on start
+        document.getElementById('start-btn').addEventListener('click', () => {
+            document.getElementById('instructions').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
