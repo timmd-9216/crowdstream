@@ -14,7 +14,7 @@ import os
 import signal
 import psutil
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from typing import Dict, Optional, List
 import argparse
@@ -30,6 +30,7 @@ class ServiceConfig:
     port: int
     auto_restart: bool = False
     enabled: bool = True
+    monitor_ports: List[int] = field(default_factory=list)
 
 
 @dataclass
@@ -47,6 +48,7 @@ class ServiceStatus:
     error_message: Optional[str] = None
     port: int = 0
     logs: List[str] = None
+    managed: bool = False
 
     def __post_init__(self):
         if self.logs is None:
@@ -87,6 +89,47 @@ class ServiceManager:
         self.monitoring_thread = None
         self.monitoring_active = False
 
+    def _get_ports_to_monitor(self, service: ServiceConfig) -> List[int]:
+        return [port for port in service.monitor_ports if port]
+
+    def _find_pid_for_port(self, port: int) -> Optional[int]:
+        if not port:
+            return None
+        for proto in ('TCP', 'UDP'):
+            try:
+                output = subprocess.check_output(
+                    ['lsof', '-nP', f'-ti{proto}:{port}'],
+                    stderr=subprocess.DEVNULL
+                ).decode().strip()
+                if output:
+                    for line in output.splitlines():
+                        line = line.strip()
+                        if line.isdigit():
+                            return int(line)
+            except subprocess.CalledProcessError:
+                continue
+            except FileNotFoundError:
+                # lsof not available
+                break
+        return None
+
+    def _find_pid_for_service(self, service: ServiceConfig) -> Optional[int]:
+        for port in self._get_ports_to_monitor(service):
+            pid = self._find_pid_for_port(port)
+            if pid:
+                return pid
+        return None
+
+    def _attach_external_process(self, service_name: str, pid: int):
+        status = self.statuses[service_name]
+        status.status = 'running'
+        status.pid = pid
+        status.managed = False
+        status.error_message = None
+        if not status.last_started:
+            status.last_started = time.time()
+        print(f"Service {service_name} already running externally (PID {pid})")
+
     def load_config(self, config_path: str):
         """Load service configurations from JSON file"""
         try:
@@ -95,6 +138,12 @@ class ServiceManager:
 
             for service_data in config_data['services']:
                 service = ServiceConfig(**service_data)
+                # Ensure primary port is monitored even if monitor_ports not defined
+                if service.port and service.port not in service.monitor_ports:
+                    service.monitor_ports.append(service.port)
+                # Remove duplicates while preserving order
+                service.monitor_ports = list(dict.fromkeys(service.monitor_ports))
+
                 self.services[service.name] = service
                 self.statuses[service.name] = ServiceStatus(
                     name=service.name,
@@ -124,6 +173,11 @@ class ServiceManager:
             return False
 
         try:
+            existing_pid = self._find_pid_for_service(service)
+            if existing_pid:
+                self._attach_external_process(service_name, existing_pid)
+                return True
+
             self.statuses[service_name].status = 'starting'
             self.statuses[service_name].error_message = None
             self.statuses[service_name].logs = []
@@ -173,6 +227,7 @@ class ServiceManager:
             self.statuses[service_name].pid = process.pid
             self.statuses[service_name].last_started = time.time()
             self.statuses[service_name].restart_count += 1
+            self.statuses[service_name].managed = True
 
             print(f"Service {service_name} started with PID {process.pid}")
             return True
@@ -221,6 +276,15 @@ class ServiceManager:
                         print(f"Error killing process: {e}")
 
                 del self.processes[service_name]
+            elif self.statuses[service_name].pid:
+                pid = self.statuses[service_name].pid
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                    print(f"Sent SIGTERM to external process for {service_name} (PID {pid})")
+                except ProcessLookupError:
+                    print(f"Process {pid} already stopped")
+                except Exception as e:
+                    print(f"Error stopping external process: {e}")
 
             self.statuses[service_name].status = 'stopped'
             self.statuses[service_name].pid = None
@@ -228,6 +292,7 @@ class ServiceManager:
             self.statuses[service_name].uptime = 0.0
             self.statuses[service_name].cpu_percent = 0.0
             self.statuses[service_name].memory_mb = 0.0
+            self.statuses[service_name].managed = False
 
             print(f"Service {service_name} stopped")
             return True
@@ -317,6 +382,28 @@ class ServiceManager:
 
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             pass
+
+                else:
+                    service = self.services[service_name]
+                    status = self.statuses[service_name]
+
+                    pid = self._find_pid_for_service(service)
+                    if pid:
+                        if status.status != 'running' or status.pid != pid:
+                            self._attach_external_process(service_name, pid)
+                        try:
+                            proc = psutil.Process(pid)
+                            status.cpu_percent = proc.cpu_percent(interval=0.1)
+                            status.memory_mb = proc.memory_info().rss / 1024 / 1024
+                            if status.last_started:
+                                status.uptime = time.time() - status.last_started
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+                    else:
+                        if status.status == 'running' and not status.managed:
+                            status.status = 'stopped'
+                            status.pid = None
+                            status.uptime = 0
 
             time.sleep(1)
 

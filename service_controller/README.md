@@ -110,7 +110,8 @@ Edita `config/services.json` para agregar o modificar servicios:
       "description": "Dashboard FastAPI (OSC: 5005, Web: 8082)",
       "port": 8082,
       "auto_restart": false,
-      "enabled": true
+      "enabled": true,
+      "monitor_ports": [5005, 8082]
     },
     {
       "name": "visualizer",
@@ -119,7 +120,8 @@ Edita `config/services.json` para agregar o modificar servicios:
       "description": "Visualizador espacial 3D (OSC: 5006, Web: 8090)",
       "port": 8090,
       "auto_restart": false,
-      "enabled": true
+      "enabled": true,
+      "monitor_ports": [5006, 8090]
     },
     {
       "name": "detector",
@@ -143,6 +145,7 @@ Edita `config/services.json` para agregar o modificar servicios:
 - `port`: Puerto en el que escucha el servicio (0 si no aplica)
 - `auto_restart`: Reiniciar automáticamente si se cae (default: false)
 - `enabled`: Si el servicio está habilitado (default: true)
+- `monitor_ports`: Lista de puertos (TCP o UDP) a monitorear para detectar instancias externas (incluye el puerto principal por defecto)
 
 ## Arquitectura
 
