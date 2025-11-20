@@ -128,6 +128,11 @@ class ServiceController {
                 <button class="service-btn logs" onclick="controller.showLogs('${config.name}')">
                     📋 Logs
                 </button>
+                ${config.port && config.port > 0 ? `
+                    <button class="service-btn open" onclick="controller.openService('${config.name}')">
+                        🌐 Abrir
+                    </button>
+                ` : ''}
             </div>
         `;
 
@@ -158,6 +163,17 @@ class ServiceController {
         if (this.currentLogService) {
             this.refreshLogs();
         }
+    }
+
+    openService(serviceName) {
+        const service = this.services.find(s => s.config.name === serviceName);
+        if (!service || !service.config.port) {
+            alert('Este servicio no tiene puerto de acceso.');
+            return;
+        }
+
+        const url = `http://localhost:${service.config.port}`;
+        window.open(url, '_blank');
     }
 
     updateServiceCard(serviceData) {

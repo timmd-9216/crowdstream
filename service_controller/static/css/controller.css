@@ -243,13 +243,13 @@ header h1 {
 
 /* Service Actions */
 .service-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 10px;
     margin-top: 15px;
 }
 
 .service-btn {
-    flex: 1;
     padding: 10px;
     border: none;
     border-radius: 6px;
@@ -290,6 +290,14 @@ header h1 {
 
 .service-btn.logs:hover {
     background: #2563eb;
+}
+
+.service-btn.open {
+    background: #2563eb;
+}
+
+.service-btn.open:hover {
+    background: #1d4ed8;
 }
 
 .service-btn:disabled {

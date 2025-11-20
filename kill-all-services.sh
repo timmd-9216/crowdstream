@@ -33,6 +33,7 @@ kill_service() {
 # Kill services
 kill_service "Dance Movement Detector" "dance_movement_detector.py"
 kill_service "Dashboard Server" "dashboard_server.py"
+kill_service "FastAPI Dashboard" "dance_dashboard_alt/src/server.py"
 kill_service "Space Visualizer" "visualizer_server.py"
 kill_service "Service Controller" "service_manager.py"
 
@@ -40,7 +41,7 @@ echo ""
 echo "=== Verifying Ports ==="
 
 # Check if ports are free
-for port in 5005 5006 5007 8000 8080 8081 8090; do
+for port in 5005 5006 5007 8000 8080 8081 8082 8090 8091; do
     if lsof -ti:$port > /dev/null 2>&1; then
         echo "⚠ Port $port still in use"
     else

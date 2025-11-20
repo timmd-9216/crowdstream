@@ -23,7 +23,7 @@ Sistema de control remoto web para gestionar todos los servicios del proyecto de
 
 ## Servicios Gestionados
 
-1. **Dashboard** - Dashboard de estadísticas (OSC: 5005, Web: 8081)
+1. **Dashboard** - Dashboard FastAPI (OSC: 5005, Web: 8082)
 2. **Visualizer** - Visualizador espacial 3D (OSC: 5006, Web: 8090)
 3. **Detector** - Dance Movement Detector (envía a ambos puertos OSC)
 
@@ -235,7 +235,7 @@ service_controller/
 2. Click en "▶️ Iniciar Todos"
 3. Espera a que todos los servicios estén en estado "Ejecutando"
 4. Abre las interfaces individuales:
-   - Dashboard: http://localhost:8081
+   - Dashboard: http://localhost:8082
    - Visualizer: http://localhost:8090
 
 ### Depurar un servicio

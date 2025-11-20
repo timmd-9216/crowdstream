@@ -347,7 +347,8 @@ class ControllerApp:
                          template_folder='../templates',
                          static_folder='../static')
         self.app.config['SECRET_KEY'] = 'service-controller-secret'
-        self.socketio = SocketIO(self.app, cors_allowed_origins="*")
+        # Force threading async mode to avoid eventlet monkey-patching conflicts
+        self.socketio = SocketIO(self.app, cors_allowed_origins="*", async_mode='threading')
 
         self.setup_routes()
         self.setup_socketio()
