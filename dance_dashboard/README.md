@@ -1,6 +1,7 @@
 # Dance Movement Dashboard
 
 ![Dashboard example](dashboard_example.png)
+![Dashboard example 2](dashboard_example2.png)
 
 Dashboard web en tiempo real para visualizar datos de movimiento de bailarines recibidos vía OSC desde el detector de movimiento.
 

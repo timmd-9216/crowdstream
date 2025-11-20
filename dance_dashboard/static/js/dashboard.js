@@ -15,20 +15,35 @@ class DashboardClient {
     }
 
     connectWebSocket() {
-        this.socket = io();
+        console.log('Initializing WebSocket connection...');
+        this.socket = io({
+            transports: ['websocket'],
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionAttempts: 10
+        });
 
         this.socket.on('connect', () => {
-            console.log('Connected to server');
+            console.log('✅ Connected to dashboard server');
             this.updateConnectionStatus(true);
         });
 
         this.socket.on('disconnect', () => {
-            console.log('Disconnected from server');
+            console.log('❌ Disconnected from dashboard server');
             this.updateConnectionStatus(false);
         });
 
+        this.socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+        });
+
         this.socket.on('update', (data) => {
+            console.log('📊 Received update:', data);
             this.handleUpdate(data);
+        });
+
+        this.socket.on('stats_reset', () => {
+            console.log('🔄 Stats reset confirmed by server');
         });
     }
 
@@ -65,29 +80,52 @@ class DashboardClient {
     }
 
     updateCurrentStats(current) {
-        document.getElementById('current-people').textContent = current.person_count;
-        document.getElementById('current-total').textContent = current.total_movement.toFixed(1);
-        document.getElementById('current-arms').textContent = current.arm_movement.toFixed(1);
-        document.getElementById('current-legs').textContent = current.leg_movement.toFixed(1);
-        document.getElementById('current-head').textContent = current.head_movement.toFixed(1);
-        document.getElementById('last-update').textContent = current.datetime;
+        console.log('📈 Updating current stats:', current);
+        const peopleEl = document.getElementById('current-people');
+        const totalEl = document.getElementById('current-total');
+        const armsEl = document.getElementById('current-arms');
+        const legsEl = document.getElementById('current-legs');
+        const headEl = document.getElementById('current-head');
+        const updateEl = document.getElementById('last-update');
+
+        if (peopleEl) peopleEl.textContent = current.person_count;
+        if (totalEl) totalEl.textContent = current.total_movement.toFixed(1);
+        if (armsEl) armsEl.textContent = current.arm_movement.toFixed(1);
+        if (legsEl) legsEl.textContent = current.leg_movement.toFixed(1);
+        if (headEl) headEl.textContent = current.head_movement.toFixed(1);
+        if (updateEl) updateEl.textContent = current.datetime;
+
+        console.log('✅ Current stats updated');
     }
 
     updateCumulativeStats(cumulative) {
-        document.getElementById('cum-messages').textContent = cumulative.total_messages;
-        document.getElementById('cum-avg-people').textContent = cumulative.avg_people.toFixed(1);
-        document.getElementById('cum-max-people').textContent = cumulative.max_people;
-        document.getElementById('cum-avg-total').textContent = cumulative.avg_total_movement.toFixed(1);
-        document.getElementById('cum-max-total').textContent = cumulative.max_total_movement.toFixed(1);
+        console.log('📊 Updating cumulative stats:', cumulative);
 
-        document.getElementById('cum-avg-arms').textContent = cumulative.avg_arm_movement.toFixed(1);
-        document.getElementById('cum-max-arms').textContent = cumulative.max_arm_movement.toFixed(1);
+        const msgEl = document.getElementById('cum-messages');
+        const avgPeopleEl = document.getElementById('cum-avg-people');
+        const maxPeopleEl = document.getElementById('cum-max-people');
+        const avgTotalEl = document.getElementById('cum-avg-total');
+        const maxTotalEl = document.getElementById('cum-max-total');
+        const avgArmsEl = document.getElementById('cum-avg-arms');
+        const maxArmsEl = document.getElementById('cum-max-arms');
+        const avgLegsEl = document.getElementById('cum-avg-legs');
+        const maxLegsEl = document.getElementById('cum-max-legs');
+        const avgHeadEl = document.getElementById('cum-avg-head');
+        const maxHeadEl = document.getElementById('cum-max-head');
 
-        document.getElementById('cum-avg-legs').textContent = cumulative.avg_leg_movement.toFixed(1);
-        document.getElementById('cum-max-legs').textContent = cumulative.max_leg_movement.toFixed(1);
+        if (msgEl) msgEl.textContent = cumulative.total_messages;
+        if (avgPeopleEl) avgPeopleEl.textContent = cumulative.avg_people.toFixed(1);
+        if (maxPeopleEl) maxPeopleEl.textContent = cumulative.max_people;
+        if (avgTotalEl) avgTotalEl.textContent = cumulative.avg_total_movement.toFixed(1);
+        if (maxTotalEl) maxTotalEl.textContent = cumulative.max_total_movement.toFixed(1);
+        if (avgArmsEl) avgArmsEl.textContent = cumulative.avg_arm_movement.toFixed(1);
+        if (maxArmsEl) maxArmsEl.textContent = cumulative.max_arm_movement.toFixed(1);
+        if (avgLegsEl) avgLegsEl.textContent = cumulative.avg_leg_movement.toFixed(1);
+        if (maxLegsEl) maxLegsEl.textContent = cumulative.max_leg_movement.toFixed(1);
+        if (avgHeadEl) avgHeadEl.textContent = cumulative.avg_head_movement.toFixed(1);
+        if (maxHeadEl) maxHeadEl.textContent = cumulative.max_head_movement.toFixed(1);
 
-        document.getElementById('cum-avg-head').textContent = cumulative.avg_head_movement.toFixed(1);
-        document.getElementById('cum-max-head').textContent = cumulative.max_head_movement.toFixed(1);
+        console.log('✅ Cumulative stats updated');
     }
 
     initCharts() {
@@ -238,17 +276,35 @@ class DashboardClient {
     }
 
     updateCharts(history) {
+        if (!history || history.length === 0) {
+            console.log('No history data to display');
+            // Clear charts if no data
+            this.movementChart.data.labels = [];
+            this.movementChart.data.datasets[0].data = [];
+            this.movementChart.data.datasets[1].data = [];
+            this.movementChart.update('none');
+
+            this.bodyPartsChart.data.labels = [];
+            this.bodyPartsChart.data.datasets[0].data = [];
+            this.bodyPartsChart.data.datasets[1].data = [];
+            this.bodyPartsChart.data.datasets[2].data = [];
+            this.bodyPartsChart.update('none');
+            return;
+        }
+
         // Limit to last 50 data points for readability
         const maxPoints = 50;
         const data = history.slice(-maxPoints);
 
+        console.log(`Updating charts with ${data.length} data points`);
+
         // Extract labels and data
-        const labels = data.map(d => d.datetime);
-        const totalMovement = data.map(d => d.total_movement);
-        const personCount = data.map(d => d.person_count);
-        const armMovement = data.map(d => d.arm_movement);
-        const legMovement = data.map(d => d.leg_movement);
-        const headMovement = data.map(d => d.head_movement);
+        const labels = data.map(d => d.datetime || 'N/A');
+        const totalMovement = data.map(d => d.total_movement || 0);
+        const personCount = data.map(d => d.person_count || 0);
+        const armMovement = data.map(d => d.arm_movement || 0);
+        const legMovement = data.map(d => d.leg_movement || 0);
+        const headMovement = data.map(d => d.head_movement || 0);
 
         // Update movement chart
         this.movementChart.data.labels = labels;
@@ -268,8 +324,19 @@ class DashboardClient {
         // Reset button
         document.getElementById('reset-btn').addEventListener('click', () => {
             if (confirm('¿Estás seguro de que quieres reiniciar las estadísticas?')) {
-                this.socket.emit('reset_stats');
-                console.log('Stats reset requested');
+                console.log('🔄 Resetting statistics...');
+                console.log('Socket connected:', this.socket.connected);
+                if (this.socket.connected) {
+                    // Send reset with callback to receive immediate response
+                    this.socket.emit('reset_stats', (data) => {
+                        console.log('🔄 Stats reset confirmed by server, updating UI');
+                        this.handleUpdate(data);
+                    });
+                    console.log('✅ Reset event sent to server');
+                } else {
+                    console.error('❌ Socket not connected! Cannot send reset event');
+                    alert('Error: No hay conexión con el servidor. Recarga la página.');
+                }
             }
         });
     }

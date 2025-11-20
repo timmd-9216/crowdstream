@@ -51,6 +51,23 @@ class DashboardServer:
         self.current_data = MovementData(timestamp=time.time())
         self.lock = threading.Lock()
 
+        # Broadcast throttling (to avoid sending multiple updates per second)
+        self.last_broadcast_time = 0
+        self.min_broadcast_interval = 0.1  # Minimum 0.1 seconds between broadcasts (10 Hz max)
+        self.pending_broadcast = False
+        self.data_updated = False
+
+        # Keep track of which OSC fields have been refreshed since the last
+        # broadcast so we only emit once the detector reported all metrics.
+        self.required_fields = {
+            'person_count',
+            'total_movement',
+            'arm_movement',
+            'leg_movement',
+            'head_movement'
+        }
+        self.updated_fields = set()
+
         # Cumulative statistics
         self.cumulative_stats = {
             'total_messages': 0,
@@ -92,64 +109,89 @@ class DashboardServer:
         self.osc_dispatcher.map(f"{base}/arm_movement", self._handle_arm_movement)
         self.osc_dispatcher.map(f"{base}/leg_movement", self._handle_leg_movement)
         self.osc_dispatcher.map(f"{base}/head_movement", self._handle_head_movement)
-        self.osc_dispatcher.map("/*", self._handle_unknown)
 
     def _handle_person_count(self, address, *args):
         with self.lock:
             self.current_data.person_count = int(args[0]) if args else 0
+            self.updated_fields.add('person_count')
             self._check_complete_message()
 
     def _handle_total_movement(self, address, *args):
         with self.lock:
             self.current_data.total_movement = float(args[0]) if args else 0.0
+            self.updated_fields.add('total_movement')
             self._check_complete_message()
 
     def _handle_arm_movement(self, address, *args):
         with self.lock:
             self.current_data.arm_movement = float(args[0]) if args else 0.0
+            self.updated_fields.add('arm_movement')
             self._check_complete_message()
 
     def _handle_leg_movement(self, address, *args):
         with self.lock:
             self.current_data.leg_movement = float(args[0]) if args else 0.0
+            self.updated_fields.add('leg_movement')
             self._check_complete_message()
 
     def _handle_head_movement(self, address, *args):
         with self.lock:
             self.current_data.head_movement = float(args[0]) if args else 0.0
+            self.updated_fields.add('head_movement')
             self._check_complete_message()
 
-    def _handle_unknown(self, address, *args):
-        print(f"Unknown OSC message: {address} {args}")
-
     def _check_complete_message(self):
-        """Check if we have a complete set of data and broadcast it"""
-        # Simple heuristic: if we have recent data, broadcast it
-        # In production, you might want more sophisticated message grouping
+        """Check if we have a complete set of data and broadcast it with throttling"""
         current_time = time.time()
 
         # Update timestamp
         self.current_data.timestamp = current_time
 
+        # Skip broadcasting until all required metrics were updated to
+        # avoid emitting stale/partial data when OSC messages arrive
+        # sequentially within the same batch.
+        if not self.required_fields.issubset(self.updated_fields):
+            return
+
+        # Throttle broadcasts to avoid sending multiple updates per second
+        time_since_last_broadcast = current_time - self.last_broadcast_time
+
+        if time_since_last_broadcast >= self.min_broadcast_interval:
+            # Enough time has passed, broadcast now
+            self._update_cumulative_stats()
+            self._broadcast_update()
+            self.last_broadcast_time = current_time
+            self.pending_broadcast = False
+
+            print(f"[{datetime.fromtimestamp(current_time).strftime('%H:%M:%S')}] "
+                  f"People: {self.current_data.person_count} | "
+                  f"Total: {self.current_data.total_movement:.1f} | "
+                  f"Arms: {self.current_data.arm_movement:.1f} | "
+                  f"Legs: {self.current_data.leg_movement:.1f} | "
+                  f"Head: {self.current_data.head_movement:.1f}")
+        else:
+            # Too soon, will broadcast on next eligible message
+            pass
+
+    def _broadcast_update(self):
+        """Broadcast current state to all connected clients"""
         # Add to history
-        self.history.append(self.current_data.to_dict())
+        data_dict = self.current_data.to_dict()
+        self.history.append(data_dict)
 
-        # Update cumulative stats
-        self._update_cumulative_stats()
-
-        # Broadcast to web clients
-        self.socketio.emit('update', {
-            'current': self.current_data.to_dict(),
+        # Prepare update message
+        update_msg = {
+            'current': data_dict,
             'cumulative': self.cumulative_stats,
             'history': list(self.history)
-        })
+        }
 
-        print(f"[{datetime.fromtimestamp(current_time).strftime('%H:%M:%S')}] "
-              f"People: {self.current_data.person_count} | "
-              f"Total: {self.current_data.total_movement:.1f} | "
-              f"Arms: {self.current_data.arm_movement:.1f} | "
-              f"Legs: {self.current_data.leg_movement:.1f} | "
-              f"Head: {self.current_data.head_movement:.1f}")
+        # Broadcast to web clients
+        self.socketio.emit('update', update_msg)
+        print(f"[WebSocket] Broadcast sent to clients (history: {len(self.history)} items)")
+
+        # Reset tracker so the next OSC batch must refresh all metrics again
+        self.updated_fields.clear()
 
     def _update_cumulative_stats(self):
         """Update cumulative statistics"""
@@ -200,7 +242,21 @@ class DashboardServer:
         """Setup Flask routes"""
         @self.app.route('/')
         def index():
-            return render_template('dashboard.html')
+            response = render_template('dashboard.html')
+            # Disable caching to ensure fresh content
+            from flask import make_response
+            resp = make_response(response)
+            resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            resp.headers['Pragma'] = 'no-cache'
+            resp.headers['Expires'] = '0'
+            return resp
+
+        @self.app.route('/test')
+        def test():
+            from flask import send_from_directory
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            return send_from_directory(base_dir, 'test_websocket.html')
 
         @self.app.route('/api/current')
         def api_current():
@@ -245,7 +301,22 @@ class DashboardServer:
                     'start_time': time.time()
                 }
                 self.history.clear()
+                self.updated_fields.clear()
                 print('Statistics reset')
+
+                # Prepare reset data
+                reset_data = {
+                    'current': self.current_data.to_dict(),
+                    'cumulative': self.cumulative_stats,
+                    'history': list(self.history)
+                }
+
+                # Broadcast the reset to all clients (include initiator)
+                self.socketio.emit('update', reset_data)
+                print('[WebSocket] Reset broadcast sent to all clients')
+
+                # Return data so Socket.IO acknowledgements update the caller
+                return reset_data
 
     def start_osc_server(self):
         """Start OSC server in separate thread"""
@@ -265,7 +336,7 @@ class DashboardServer:
         # Start web server
         print(f"Web dashboard starting on http://localhost:{self.web_port}")
         print(f"Open your browser to http://localhost:{self.web_port}")
-        self.socketio.run(self.app, host='0.0.0.0', port=self.web_port, debug=False)
+        self.socketio.run(self.app, host='0.0.0.0', port=self.web_port, debug=False, allow_unsafe_werkzeug=True)
 
     def stop(self):
         """Stop servers"""
@@ -277,8 +348,8 @@ def main():
     parser = argparse.ArgumentParser(description='Dance Movement Dashboard')
     parser.add_argument('--osc-port', type=int, default=5005,
                         help='OSC listening port (default: 5005)')
-    parser.add_argument('--web-port', type=int, default=8080,
-                        help='Web dashboard port (default: 8080)')
+    parser.add_argument('--web-port', type=int, default=8081,
+                        help='Web dashboard port (default: 8081)')
     parser.add_argument('--history', type=int, default=100,
                         help='Number of data points to keep in history (default: 100)')
 
