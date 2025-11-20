@@ -105,10 +105,10 @@ Edita `config/services.json` para agregar o modificar servicios:
   "services": [
     {
       "name": "dashboard",
-      "directory": "dance_dashboard",
-      "command": "venv/bin/python3 src/dashboard_server.py --osc-port 5005 --web-port 8081",
-      "description": "Dashboard de estadísticas (OSC: 5005, Web: 8081)",
-      "port": 8081,
+      "directory": "dance_dashboard_alt",
+      "command": "venv/bin/python3 src/server.py --osc-port 5005 --web-port 8082",
+      "description": "Dashboard FastAPI (OSC: 5005, Web: 8082)",
+      "port": 8082,
       "auto_restart": false,
       "enabled": true
     },

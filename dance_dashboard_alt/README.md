@@ -1,5 +1,8 @@
 # Dance Dashboard (FastAPI)
 
+![Dashboard example 1](dance_dashboard_example_1.png)
+![Dashboard example 2](dance_dashboard_example_2.png)
+
 Dashboard alternativo que muestra la misma información que el dashboard original
 pero implementado con **FastAPI**, WebSockets nativos y Chart.js.
 
