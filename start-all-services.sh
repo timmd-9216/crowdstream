@@ -18,29 +18,28 @@ echo ""
 echo "=== Starting Services ==="
 echo ""
 
-# Start Dashboard (OSC: 5005, Web: 8081)
-echo "Starting Dashboard..."
-cd dance_dashboard
+echo "Starting FastAPI Dashboard..."
+cd dance_dashboard_alt
 if [ -d "venv" ]; then
-    venv/bin/python3 src/dashboard_server.py --osc-port 5005 --web-port 8081 > ../logs/dashboard.log 2>&1 &
+    venv/bin/python3 src/server.py --osc-port 5005 --web-port 8082 > ../logs/dashboard_alt.log 2>&1 &
 else
-    python3 src/dashboard_server.py --osc-port 5005 --web-port 8081 > ../logs/dashboard.log 2>&1 &
+    python3 src/server.py --osc-port 5005 --web-port 8082 > ../logs/dashboard_alt.log 2>&1 &
 fi
 DASHBOARD_PID=$!
-echo "  Dashboard started (PID: $DASHBOARD_PID) on http://localhost:8081"
+echo "  Dashboard (alt) started (PID: $DASHBOARD_PID) on http://localhost:8082"
 cd ..
 sleep 2
 
-# Start Visualizer (OSC: 5006, Web: 8090)
-echo "Starting Space Visualizer..."
-cd space_visualizer
+# Start Cosmic Journey Visualizer (OSC: 5007, Web: 8091)
+echo "Starting Cosmic Journey Visualizer..."
+cd cosmic_journey
 if [ -d "venv" ]; then
-    venv/bin/python3 src/visualizer_server.py --osc-port 5006 --web-port 8090 > ../logs/visualizer.log 2>&1 &
+    venv/bin/python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > ../logs/cosmic.log 2>&1 &
 else
-    python3 src/visualizer_server.py --osc-port 5006 --web-port 8090 > ../logs/visualizer.log 2>&1 &
+    python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > ../logs/cosmic.log 2>&1 &
 fi
 VISUALIZER_PID=$!
-echo "  Visualizer started (PID: $VISUALIZER_PID) on http://localhost:8090"
+echo "  Cosmic Journey started (PID: $VISUALIZER_PID) on http://localhost:8091"
 cd ..
 sleep 2
 
@@ -60,9 +59,9 @@ sleep 2
 echo ""
 echo "=== All Services Started ==="
 echo ""
-echo "📊 Dashboard:   http://localhost:8081  (OSC: 5005)"
-echo "🌌 Visualizer:  http://localhost:8090  (OSC: 5006)"
-echo "🤖 Detector:    Sending to both OSC ports"
+echo "📊 Dashboard (alt): http://localhost:8082  (OSC: 5005)"
+echo "🌌 Cosmic Journey:  http://localhost:8091  (OSC: 5007)"
+echo "🤖 Detector:        Sending to all OSC ports"
 echo ""
 echo "Process IDs:"
 echo "  Dashboard:  $DASHBOARD_PID"
@@ -70,8 +69,8 @@ echo "  Visualizer: $VISUALIZER_PID"
 echo "  Detector:   $DETECTOR_PID"
 echo ""
 echo "To view logs:"
-echo "  tail -f logs/dashboard.log"
-echo "  tail -f logs/visualizer.log"
+echo "  tail -f logs/dashboard_alt.log"
+echo "  tail -f logs/cosmic.log"
 echo "  tail -f logs/detector.log"
 echo ""
 echo "To stop all services:"

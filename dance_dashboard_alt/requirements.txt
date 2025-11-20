@@ -1,0 +1,4 @@
+fastapi>=0.110
+uvicorn[standard]>=0.23
+python-osc>=1.8
+jinja2>=3.1
