@@ -201,19 +201,31 @@ class SpaceVisualizer {
     }
 
     connectWebSocket() {
-        this.socket = io();
+        console.log('🚀 Initializing WebSocket connection to visualizer...');
+        this.socket = io({
+            transports: ['websocket'],
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionAttempts: 10
+        });
 
         this.socket.on('connect', () => {
-            console.log('Connected to visualizer server');
+            console.log('✅ Connected to visualizer server');
             this.updateStatus('Conectado', true);
         });
 
         this.socket.on('disconnect', () => {
-            console.log('Disconnected from visualizer server');
+            console.log('❌ Disconnected from visualizer server');
             this.updateStatus('Desconectado', false);
         });
 
+        this.socket.on('connect_error', (error) => {
+            console.error('❌ Connection error:', error);
+            this.updateStatus('Error de conexión', false);
+        });
+
         this.socket.on('update', (data) => {
+            console.log('🌌 Received update:', data);
             this.handleUpdate(data);
         });
     }
@@ -225,8 +237,6 @@ class SpaceVisualizer {
     }
 
     handleUpdate(data) {
-        console.log('Received update:', data);
-
         // Smoothly interpolate parameters
         this.params.speed = this.lerp(this.params.speed, data.speed, 0.1);
         this.params.colorIntensity = this.lerp(this.params.colorIntensity, data.color_intensity, 0.1);
@@ -256,17 +266,30 @@ class SpaceVisualizer {
     }
 
     updateUI(data) {
-        document.getElementById('speed-value').textContent = data.speed.toFixed(2);
-        document.getElementById('particles-value').textContent = data.particle_count;
-        document.getElementById('warp-value').textContent = (data.warp_factor * 100).toFixed(0) + '%';
-        document.getElementById('color-value').textContent = (data.color_intensity * 100).toFixed(0) + '%';
-        document.getElementById('people-value').textContent = data.person_count;
+        console.log('🎨 Updating UI with:', {
+            speed: data.speed,
+            particles: data.particle_count,
+            warp: data.warp_factor,
+            color: data.color_intensity,
+            people: data.person_count,
+            rotation: data.rotation_speed
+        });
 
-        // Update rotation indicator (for debugging)
-        const rotationElement = document.getElementById('rotation-value');
-        if (rotationElement) {
-            rotationElement.textContent = data.rotation_speed.toFixed(2);
-        }
+        const speedEl = document.getElementById('speed-value');
+        const particlesEl = document.getElementById('particles-value');
+        const warpEl = document.getElementById('warp-value');
+        const colorEl = document.getElementById('color-value');
+        const peopleEl = document.getElementById('people-value');
+        const rotationEl = document.getElementById('rotation-value');
+
+        if (speedEl) speedEl.textContent = data.speed.toFixed(2);
+        if (particlesEl) particlesEl.textContent = data.particle_count;
+        if (warpEl) warpEl.textContent = (data.warp_factor * 100).toFixed(0) + '%';
+        if (colorEl) colorEl.textContent = (data.color_intensity * 100).toFixed(0) + '%';
+        if (peopleEl) peopleEl.textContent = data.person_count;
+        if (rotationEl) rotationEl.textContent = data.rotation_speed.toFixed(2);
+
+        console.log('✅ UI elements updated');
     }
 
     animate() {

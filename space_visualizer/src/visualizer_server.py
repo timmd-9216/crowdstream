@@ -66,6 +66,11 @@ class SpaceVisualizerServer:
         self.state = VisualizerState()
         self.lock = threading.Lock()
 
+        # Broadcast throttling (to avoid sending multiple updates per second)
+        self.last_broadcast_time = 0
+        self.min_broadcast_interval = 0.1  # Minimum 0.1 seconds between broadcasts (10 Hz max)
+        self.pending_broadcast = False
+
         # Flask app
         self.app = Flask(__name__,
                          template_folder='../templates',
@@ -227,20 +232,47 @@ class SpaceVisualizerServer:
                 source = nebula_config.get("source", "total_movement")
                 self.state.nebula_intensity = self._apply_mapping("nebula_intensity", sources.get(source, 0))
 
-        # Broadcast to clients
-        self.socketio.emit('update', self.state.to_dict())
+        # Throttle broadcasts to avoid sending multiple updates per second
+        current_time = self.state.timestamp
+        time_since_last_broadcast = current_time - self.last_broadcast_time
 
-        print(f"[{datetime.fromtimestamp(self.state.timestamp).strftime('%H:%M:%S')}] "
-              f"Speed: {self.state.speed:.2f} | "
-              f"StarSize: {self.state.star_size:.2f} | "
-              f"Rotation: {self.state.rotation_speed:.2f} | "
-              f"Color: {self.state.color_intensity:.2f}")
+        if time_since_last_broadcast >= self.min_broadcast_interval:
+            # Enough time has passed, broadcast now
+            state_dict = self.state.to_dict()
+            self.socketio.emit('update', state_dict)
+            self.last_broadcast_time = current_time
+            self.pending_broadcast = False
+
+            print(f"[{datetime.fromtimestamp(self.state.timestamp).strftime('%H:%M:%S')}] "
+                  f"Speed: {self.state.speed:.2f} | "
+                  f"StarSize: {self.state.star_size:.2f} | "
+                  f"Rotation: {self.state.rotation_speed:.2f} | "
+                  f"Color: {self.state.color_intensity:.2f} | "
+                  f"Warp: {self.state.warp_factor:.2f}")
+            print(f"[WebSocket] Broadcast sent to visualizer clients")
+        else:
+            # Too soon, will broadcast on next eligible message
+            pass
 
     def setup_flask_routes(self):
         """Setup Flask routes"""
         @self.app.route('/')
         def index():
-            return render_template('visualizer.html')
+            response = render_template('visualizer.html')
+            # Disable caching to ensure fresh content
+            from flask import make_response
+            resp = make_response(response)
+            resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            resp.headers['Pragma'] = 'no-cache'
+            resp.headers['Expires'] = '0'
+            return resp
+
+        @self.app.route('/test')
+        def test():
+            from flask import send_from_directory
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            return send_from_directory(base_dir, 'test_websocket.html')
 
         @self.app.route('/api/state')
         def api_state():
@@ -249,14 +281,16 @@ class SpaceVisualizerServer:
 
         @self.socketio.on('connect')
         def handle_connect():
-            print('Client connected to visualizer')
+            print('✅ Client connected to visualizer')
             # Send current state to newly connected client
             with self.lock:
-                self.socketio.emit('update', self.state.to_dict())
+                state_dict = self.state.to_dict()
+                self.socketio.emit('update', state_dict)
+                print(f'[WebSocket] Sent initial state to new client: Speed={state_dict["speed"]:.2f}, Stars={state_dict["particle_count"]}')
 
         @self.socketio.on('disconnect')
         def handle_disconnect():
-            print('Client disconnected from visualizer')
+            print('❌ Client disconnected from visualizer')
 
     def start_osc_server(self):
         """Start OSC server in separate thread"""
@@ -283,7 +317,7 @@ class SpaceVisualizerServer:
         print("  - Total movement → Color intensity & Warp")
         print("  - Person count → Star density")
         print()
-        self.socketio.run(self.app, host='0.0.0.0', port=self.web_port, debug=False)
+        self.socketio.run(self.app, host='0.0.0.0', port=self.web_port, debug=False, allow_unsafe_werkzeug=True)
 
     def stop(self):
         """Stop servers"""
@@ -293,8 +327,8 @@ class SpaceVisualizerServer:
 
 def main():
     parser = argparse.ArgumentParser(description='Space Journey Visualizer')
-    parser.add_argument('--osc-port', type=int, default=5005,
-                        help='OSC listening port (default: 5005)')
+    parser.add_argument('--osc-port', type=int, default=5006,
+                        help='OSC listening port (default: 5006)')
     parser.add_argument('--web-port', type=int, default=8090,
                         help='Web visualizer port (default: 8090)')
     parser.add_argument('--mapping', type=str, default='config/mapping.json',
