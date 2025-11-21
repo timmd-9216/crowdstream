@@ -56,7 +56,10 @@ class CosmicSkeletonVisualizer {
         this.connectWebSocket();
         this.setupEventListeners();
         this.createStars();
+        this.createPlanets();
         this.animateBackground();
+        this.startMeteorShower();
+        this.startAsteroidField();
     }
 
     createStars() {
@@ -76,6 +79,112 @@ class CosmicSkeletonVisualizer {
             star.style.animation = `twinkle ${Math.random() * 5 + 3}s infinite`;
             starfield.appendChild(star);
         }
+    }
+
+    createPlanets() {
+        const planetsLayer = document.getElementById('planets-layer');
+        const planets = [
+            { class: 'jupiter', duration: 200, top: '15%', left: '10%' },
+            { class: 'saturn', duration: 180, top: '60%', left: '75%' },
+            { class: 'neptune', duration: 150, top: '25%', left: '85%' },
+            { class: 'mars', duration: 120, top: '70%', left: '20%' },
+            { class: 'venus', duration: 140, top: '40%', left: '5%' }
+        ];
+
+        planets.forEach(planetData => {
+            const planet = document.createElement('div');
+            planet.className = `planet ${planetData.class}`;
+            planet.style.top = planetData.top;
+            planet.style.left = planetData.left;
+            planet.style.animationDuration = `${planetData.duration}s, 8s`;
+            planetsLayer.appendChild(planet);
+        });
+    }
+
+    startMeteorShower() {
+        setInterval(() => {
+            // Random chance to spawn meteor (30% each interval)
+            if (Math.random() < 0.3) {
+                this.createMeteor();
+            }
+            // Smaller chance for shooting star (10%)
+            if (Math.random() < 0.1) {
+                this.createShootingStar();
+            }
+        }, 3000); // Check every 3 seconds
+    }
+
+    createMeteor() {
+        const meteorsLayer = document.getElementById('meteors-layer');
+        const meteor = document.createElement('div');
+        meteor.className = 'meteor';
+
+        // Random starting position at top or left edge
+        meteor.style.left = Math.random() * 50 + '%';
+        meteor.style.top = Math.random() * 30 + '%';
+
+        // Random duration for speed variation
+        const duration = Math.random() * 2 + 1.5; // 1.5-3.5 seconds
+        meteor.style.animationDuration = `${duration}s`;
+
+        meteorsLayer.appendChild(meteor);
+
+        // Remove after animation
+        setTimeout(() => {
+            meteor.remove();
+        }, duration * 1000);
+    }
+
+    createShootingStar() {
+        const meteorsLayer = document.getElementById('meteors-layer');
+        const star = document.createElement('div');
+        star.className = 'shooting-star';
+
+        // Start from top portion of screen
+        star.style.left = Math.random() * 40 + '%';
+        star.style.top = Math.random() * 20 + '%';
+
+        const duration = Math.random() * 1.5 + 1; // 1-2.5 seconds
+        star.style.animationDuration = `${duration}s`;
+
+        meteorsLayer.appendChild(star);
+
+        setTimeout(() => {
+            star.remove();
+        }, duration * 1000);
+    }
+
+    startAsteroidField() {
+        setInterval(() => {
+            // Spawn asteroid every 15-25 seconds
+            if (Math.random() < 0.3) {
+                this.createAsteroid();
+            }
+        }, 8000);
+    }
+
+    createAsteroid() {
+        const meteorsLayer = document.getElementById('meteors-layer');
+        const asteroid = document.createElement('div');
+        asteroid.className = 'asteroid';
+
+        // Random size
+        const size = Math.random() * 30 + 20; // 20-50px
+        asteroid.style.width = size + 'px';
+        asteroid.style.height = size + 'px';
+
+        // Random vertical position
+        asteroid.style.top = Math.random() * 80 + 10 + '%';
+
+        // Random duration for slow drift
+        const duration = Math.random() * 20 + 30; // 30-50 seconds
+        asteroid.style.animationDuration = `${duration}s`;
+
+        meteorsLayer.appendChild(asteroid);
+
+        setTimeout(() => {
+            asteroid.remove();
+        }, duration * 1000);
     }
 
     animateBackground() {

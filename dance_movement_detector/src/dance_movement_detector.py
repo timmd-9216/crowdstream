@@ -211,6 +211,9 @@ class DanceMovementDetector:
                     self.tracker.update(person_id, kps)
                     active_ids.add(person_id)
 
+                # Send keypoint data for skeleton visualization
+                self._send_keypoint_data(track_ids, keypoints)
+
                 # Cleanup old tracks
                 self.tracker.cleanup_old_tracks(active_ids)
 
@@ -269,6 +272,24 @@ class DanceMovementDetector:
         # Save to file if configured
         if self.config.get('save_to_file', False):
             self._save_stats(stats)
+
+    def _send_keypoint_data(self, track_ids, keypoints):
+        """Send raw keypoint data for skeleton visualization"""
+        # Only send to skeleton visualizer (assume it's listening on a different port)
+        # Format: /pose/keypoints person_id x0 y0 conf0 x1 y1 conf1 ... (17 keypoints)
+        for person_id, kps in zip(track_ids, keypoints):
+            # Flatten keypoints array
+            message_data = [int(person_id)]
+            for kp in kps:
+                message_data.extend([float(kp[0]), float(kp[1]), float(kp[2])])
+
+            # Send to all OSC clients
+            for client in self.osc_clients:
+                try:
+                    client.send_message("/pose/keypoints", message_data)
+                except Exception as e:
+                    # Silently continue if skeleton visualizer is not running
+                    pass
 
     def _send_osc_messages(self, stats: MovementStats):
         """Send movement statistics via OSC to all destinations"""
