@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌌 Cosmic Skeleton Visualizer</title>
+    <link rel="stylesheet" href="/static/css/cosmic.css?v=1">
+</head>
+<body>
+    <!-- Animated starfield background -->
+    <div class="starfield" id="starfield"></div>
+
+    <!-- Nebula effect overlay -->
+    <div class="nebula"></div>
+
+    <div class="container">
+        <header>
+            <h1 class="cosmic-title">🌌 Cosmic Skeleton</h1>
+            <p class="subtitle">✨ Real-time YOLO Pose Detection in Space ✨</p>
+        </header>
+
+        <div class="controls">
+            <button id="reset-btn" class="btn cosmic-btn">🔄 Reiniciar</button>
+            <div class="status">
+                <span id="connection-status" class="status-dot disconnected"></span>
+                <span id="connection-text">Desconectado</span>
+            </div>
+            <div class="person-count cosmic-counter">
+                👥 <span id="person-count">0</span>
+            </div>
+        </div>
+
+        <div class="canvas-container cosmic-canvas">
+            <canvas id="skeleton-canvas"></canvas>
+        </div>
+
+        <div class="info-panel cosmic-panel">
+            <h3>📊 Información del Sistema</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="label">🖼️ Canvas:</span>
+                    <span id="canvas-size">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">⚡ FPS:</span>
+                    <span id="fps">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">🕐 Última actualización:</span>
+                    <span id="last-update">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend cosmic-panel">
+            <h3>🎨 Esquema de Colores Cósmicos</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <div class="keypoint-color head"></div>
+                    <span>🔮 Cabeza - Energía púrpura</span>
+                </div>
+                <div class="legend-item">
+                    <div class="keypoint-color torso"></div>
+                    <span>💫 Torso - Luz estelar</span>
+                </div>
+                <div class="legend-item">
+                    <div class="keypoint-color arms"></div>
+                    <span>🌟 Brazos - Rayos cósmicos</span>
+                </div>
+                <div class="legend-item">
+                    <div class="keypoint-color legs"></div>
+                    <span>✨ Piernas - Nebulosa verde</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/cosmic.js?v=1"></script>
+</body>
+</html>
