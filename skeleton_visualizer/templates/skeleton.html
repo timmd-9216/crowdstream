@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skeleton Visualizer</title>
+    <link rel="stylesheet" href="/static/css/skeleton.css?v=1">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💃 Skeleton Visualizer</h1>
+            <p class="subtitle">Real-time YOLO Pose Detection</p>
+        </header>
+
+        <div class="controls">
+            <button id="reset-btn" class="btn">🔄 Reiniciar</button>
+            <div class="status">
+                <span id="connection-status" class="status-dot disconnected"></span>
+                <span id="connection-text">Desconectado</span>
+            </div>
+            <div class="person-count">
+                Personas: <span id="person-count">0</span>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="skeleton-canvas"></canvas>
+        </div>
+
+        <div class="info-panel">
+            <h3>Información</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="label">Canvas:</span>
+                    <span id="canvas-size">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">FPS:</span>
+                    <span id="fps">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Última actualización:</span>
+                    <span id="last-update">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <h3>Leyenda de Keypoints</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <div class="keypoint-color head"></div>
+                    <span>Cabeza (nariz, ojos, orejas)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="keypoint-color torso"></div>
+                    <span>Torso (hombros, caderas)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="keypoint-color arms"></div>
+                    <span>Brazos (codos, muñecas)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="keypoint-color legs"></div>
+                    <span>Piernas (rodillas, tobillos)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/skeleton.js?v=2"></script>
+</body>
+</html>
