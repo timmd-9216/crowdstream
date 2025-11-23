@@ -82,7 +82,7 @@ Same as web version:
 
 # Python packages (requirements-gpu.txt)
 python-osc==1.7.4       # OSC protocol
-pyglet==1.3.2           # OpenGL windowing (has Python 3.5 wheels!)
+pyglet==1.4.10          # OpenGL windowing (Python 3.5 compatible, no f-strings)
 ```
 
 ## Installation on Jetson TX1
