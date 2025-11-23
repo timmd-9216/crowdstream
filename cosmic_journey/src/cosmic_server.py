@@ -212,7 +212,7 @@ class CosmicVisualizerServer(object):
         print("  - Total movement -> Energy & Nebula")
         print("  - Person count -> (future: multiple galaxies)")
         print()
-        self.socketio.run(self.app, host='0.0.0.0', port=self.web_port, debug=False, allow_unsafe_werkzeug=True)
+        self.socketio.run(self.app, host='0.0.0.0', port=self.web_port, debug=False)
 
     def stop(self):
         """Stop servers"""
