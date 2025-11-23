@@ -1,4 +1,7 @@
-ultralytics>=8.0.0
-opencv-python>=4.8.0
-numpy>=1.24.0
-python-osc>=1.8.0
+# Compatible with Ubuntu 16.04 (glibc 2.23) and Python 3.8
+ultralytics==8.0.196
+opencv-python-headless==4.5.5.64
+numpy==1.21.6
+python-osc==1.8.3
+torch==1.13.1
+torchvision==0.14.1

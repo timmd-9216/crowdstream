@@ -1,4 +1,7 @@
-fastapi>=0.110
-uvicorn[standard]>=0.23
-python-osc>=1.8
-jinja2>=3.1
+# Compatible with Ubuntu 16.04 (glibc 2.23) and Python 3.8
+fastapi==0.95.2
+uvicorn==0.22.0
+python-osc==1.8.3
+jinja2==3.1.2
+starlette==0.27.0
+pydantic==1.10.12
