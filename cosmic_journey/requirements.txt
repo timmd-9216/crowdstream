@@ -1,14 +1,16 @@
 # Compatible with Jetson TX1 - Ubuntu 16.04 - Python 3.5.2
+# Using simple threading instead of eventlet (greenlet requires C++11)
 flask==1.1.4
 flask-socketio==4.3.2
 python-socketio==4.6.1
 python-osc==1.7.4
 werkzeug==1.0.1
 python-engineio==3.14.2
-eventlet==0.30.2
+# eventlet==0.30.2 (removed - greenlet compilation fails on Jetson TX1)
+# gevent==1.4.0 (alternative, but also requires compilation)
+# Using async_mode='threading' for flask-socketio instead
 markupsafe==1.1.1
 jinja2==2.11.3
 itsdangerous==1.1.0
 click==7.1.2
 six==1.16.0
-dnspython==1.16.0

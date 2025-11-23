@@ -10,29 +10,30 @@ from pythonosc import dispatcher, osc_server
 import threading
 import time
 import json
-from dataclasses import dataclass
 from datetime import datetime
 import argparse
 
 
-@dataclass
-class CosmicState:
-    """Current state of the cosmic visualizer"""
-    person_count: int = 0
-    total_movement: float = 0.0
-    arm_movement: float = 0.0
-    leg_movement: float = 0.0
-    head_movement: float = 0.0
-    timestamp: float = 0.0
+class CosmicState(object):
+    """Current state of the cosmic visualizer - Python 3.5 compatible"""
 
-    # Visualization parameters
-    galaxy_rotation: float = 0.0     # Galaxy spiral rotation
-    nebula_density: float = 0.0      # Nebula cloud density
-    asteroid_speed: float = 1.0      # Asteroid field speed
-    cosmic_zoom: float = 1.0         # Camera zoom level
-    star_brightness: float = 0.5     # Overall brightness
-    planet_orbit_speed: float = 0.0  # Planet orbital speed
-    cosmic_energy: float = 0.0       # Energy field intensity
+    def __init__(self):
+        # Movement data
+        self.person_count = 0
+        self.total_movement = 0.0
+        self.arm_movement = 0.0
+        self.leg_movement = 0.0
+        self.head_movement = 0.0
+        self.timestamp = 0.0
+
+        # Visualization parameters
+        self.galaxy_rotation = 0.0      # Galaxy spiral rotation
+        self.nebula_density = 0.0       # Nebula cloud density
+        self.asteroid_speed = 1.0       # Asteroid field speed
+        self.cosmic_zoom = 1.0          # Camera zoom level
+        self.star_brightness = 0.5      # Overall brightness
+        self.planet_orbit_speed = 0.0   # Planet orbital speed
+        self.cosmic_energy = 0.0        # Energy field intensity
 
     def to_dict(self):
         return {
@@ -52,10 +53,10 @@ class CosmicState:
         }
 
 
-class CosmicVisualizerServer:
+class CosmicVisualizerServer(object):
     """Server for cosmic journey visualization"""
 
-    def __init__(self, osc_port: int, web_port: int):
+    def __init__(self, osc_port, web_port):
         self.osc_port = osc_port
         self.web_port = web_port
 
@@ -72,7 +73,8 @@ class CosmicVisualizerServer:
                          template_folder='../templates',
                          static_folder='../static')
         self.app.config['SECRET_KEY'] = 'cosmic-visualizer-secret'
-        self.socketio = SocketIO(self.app, cors_allowed_origins="*")
+        # Use threading mode for Python 3.5 / Jetson TX1 compatibility
+        self.socketio = SocketIO(self.app, async_mode='threading', cors_allowed_origins="*")
 
         # OSC dispatcher
         self.osc_dispatcher = dispatcher.Dispatcher()
