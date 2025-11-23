@@ -1,0 +1,6 @@
+# GPU-Accelerated Skeleton Visualizer for Jetson TX1
+# Python 3.5.2 compatible
+# Uses OpenGL via pyglet (has pre-compiled wheels, no SDL2 needed)
+
+python-osc==1.7.4
+pyglet==1.4.10  # Last version with Python 2/3.5 support (before f-strings)
