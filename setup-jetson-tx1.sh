@@ -50,10 +50,11 @@ sudo apt-get install -y \
     pkg-config
 
 echo ""
-echo "Step 2: Installing OpenCV system dependencies..."
+echo "Step 2: Installing OpenCV and system dependencies..."
+# Jetson TX1 uses libopencv4tegra from NVIDIA repo (not python3-opencv)
 sudo apt-get install -y \
-    libopencv-dev \
-    python3-opencv \
+    libopencv4tegra \
+    libopencv4tegra-dev \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
@@ -66,13 +67,17 @@ sudo apt-get install -y \
     libswscale-ffmpeg3 \
     libgtk2.0-0 \
     libatlas-base-dev \
-    gfortran
+    gfortran \
+    libjpeg8-dev \
+    libpng12-dev \
+    libtiff5-dev \
+    || echo "⚠️  Some packages may not be available, continuing..."
 
 echo ""
 echo "Step 3: Upgrading pip for Python 3.5..."
 # Use older pip compatible with Python 3.5
-python3 -m pip install --upgrade "pip<21.0"
-python3 -m pip install --upgrade setuptools wheel
+sudo -H python3 -m pip install --upgrade "pip<21.0"
+sudo -H python3 -m pip install --upgrade setuptools wheel
 
 echo ""
 echo "Step 4: Installing PyTorch for Jetson..."
@@ -105,8 +110,11 @@ if [ -d "dance_movement_detector" ]; then
     echo "  - dance_movement_detector"
     cd dance_movement_detector
     python3 -m venv venv --system-site-packages
-    venv/bin/pip install --upgrade "pip<21.0"
-    venv/bin/pip install -r requirements.txt
+    source venv/bin/activate
+    pip install --upgrade "pip<21.0"
+    echo "    Installing requirements..."
+    pip install -r requirements.txt || echo "⚠️  Some packages failed, check requirements manually"
+    deactivate
     cd ..
 fi
 
@@ -115,8 +123,11 @@ if [ -d "dance_dashboard_alt" ]; then
     echo "  - dance_dashboard_alt"
     cd dance_dashboard_alt
     python3 -m venv venv --system-site-packages
-    venv/bin/pip install --upgrade "pip<21.0"
-    venv/bin/pip install -r requirements.txt
+    source venv/bin/activate
+    pip install --upgrade "pip<21.0"
+    echo "    Installing requirements..."
+    pip install -r requirements.txt || echo "⚠️  Some packages failed, check requirements manually"
+    deactivate
     cd ..
 fi
 
@@ -125,8 +136,11 @@ if [ -d "cosmic_journey" ]; then
     echo "  - cosmic_journey"
     cd cosmic_journey
     python3 -m venv venv --system-site-packages
-    venv/bin/pip install --upgrade "pip<21.0"
-    venv/bin/pip install -r requirements.txt
+    source venv/bin/activate
+    pip install --upgrade "pip<21.0"
+    echo "    Installing requirements..."
+    pip install -r requirements.txt || echo "⚠️  Some packages failed, check requirements manually"
+    deactivate
     cd ..
 fi
 
