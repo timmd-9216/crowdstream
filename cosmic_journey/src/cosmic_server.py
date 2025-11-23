@@ -180,14 +180,14 @@ class CosmicVisualizerServer(object):
 
         @self.socketio.on('connect')
         def handle_connect():
-            print('✅ Client connected to cosmic visualizer')
+            print('[OK] Client connected to cosmic visualizer')
             with self.lock:
                 state_dict = self.state.to_dict()
                 self.socketio.emit('update', state_dict)
 
         @self.socketio.on('disconnect')
         def handle_disconnect():
-            print('❌ Client disconnected from cosmic visualizer')
+            print('[X] Client disconnected from cosmic visualizer')
 
     def start_osc_server(self):
         """Start OSC server in separate thread"""
@@ -206,11 +206,11 @@ class CosmicVisualizerServer(object):
         print("Cosmic visualizer starting on http://localhost:{}".format(self.web_port))
         print("Open your browser to http://localhost:{}".format(self.web_port))
         print("\nVisualization mapping:")
-        print("  - Leg movement → Galaxy rotation")
-        print("  - Arm movement → Asteroid speed")
-        print("  - Head movement → Cosmic zoom")
-        print("  - Total movement → Energy & Nebula")
-        print("  - Person count → (future: multiple galaxies)")
+        print("  - Leg movement -> Galaxy rotation")
+        print("  - Arm movement -> Asteroid speed")
+        print("  - Head movement -> Cosmic zoom")
+        print("  - Total movement -> Energy & Nebula")
+        print("  - Person count -> (future: multiple galaxies)")
         print()
         self.socketio.run(self.app, host='0.0.0.0', port=self.web_port, debug=False, allow_unsafe_werkzeug=True)
 
