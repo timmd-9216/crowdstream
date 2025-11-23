@@ -110,9 +110,12 @@ echo "Step 5: Creating virtual environments for services..."
 if [ -d "dance_movement_detector" ]; then
     echo "  - dance_movement_detector"
     cd dance_movement_detector
-    python3 -m venv venv --system-site-packages
+    python3 -m venv --without-pip venv --system-site-packages
     source venv/bin/activate
-    pip install --upgrade "pip<21.0"
+    echo "    Installing pip for Python 3.5..."
+    wget -q https://bootstrap.pypa.io/pip/3.5/get-pip.py
+    python get-pip.py
+    rm get-pip.py
     echo "    Installing requirements..."
     pip install -r requirements.txt || echo "⚠️  Some packages failed, check requirements manually"
     deactivate
@@ -123,9 +126,12 @@ fi
 if [ -d "dance_dashboard_alt" ]; then
     echo "  - dance_dashboard_alt"
     cd dance_dashboard_alt
-    python3 -m venv venv --system-site-packages
+    python3 -m venv --without-pip venv --system-site-packages
     source venv/bin/activate
-    pip install --upgrade "pip<21.0"
+    echo "    Installing pip for Python 3.5..."
+    wget -q https://bootstrap.pypa.io/pip/3.5/get-pip.py
+    python get-pip.py
+    rm get-pip.py
     echo "    Installing requirements..."
     pip install -r requirements.txt || echo "⚠️  Some packages failed, check requirements manually"
     deactivate
@@ -136,9 +142,12 @@ fi
 if [ -d "cosmic_journey" ]; then
     echo "  - cosmic_journey"
     cd cosmic_journey
-    python3 -m venv venv --system-site-packages
+    python3 -m venv --without-pip venv --system-site-packages
     source venv/bin/activate
-    pip install --upgrade "pip<21.0"
+    echo "    Installing pip for Python 3.5..."
+    wget -q https://bootstrap.pypa.io/pip/3.5/get-pip.py
+    python get-pip.py
+    rm get-pip.py
     echo "    Installing requirements..."
     pip install -r requirements.txt || echo "⚠️  Some packages failed, check requirements manually"
     deactivate

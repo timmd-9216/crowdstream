@@ -1,10 +1,16 @@
 # Compatible with Jetson TX1 - Ubuntu 16.04 - Python 3.5.2
 # Note: Ultralytics requires Python 3.7+, using alternative YOLO implementation
-# OpenCV is provided by libopencv4tegra (system package), skip opencv-python
-numpy==1.18.5
+
+# System packages (use --system-site-packages venv):
+# - numpy (pre-installed on Jetson, optimized for ARM)
+# - OpenCV (libopencv4tegra, CUDA-accelerated)
+
+# Python packages to install:
 python-osc==1.7.4
 typing-extensions==3.7.4.3
-pillow==6.2.2
+
+# Note: pillow requires compilation, skip if not needed
+# pillow==6.2.2
 
 # PyTorch for Jetson TX1 (requires manual installation from NVIDIA)
 # Download from: https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048

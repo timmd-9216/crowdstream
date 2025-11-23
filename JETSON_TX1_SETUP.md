@@ -17,6 +17,17 @@
 ./start-all-services.sh
 ```
 
+## Important Notes
+
+### Using System Packages
+
+The virtual environments are created with `--system-site-packages` to use Jetson's pre-installed optimized packages:
+
+- **NumPy**: Pre-installed and optimized for ARM64
+- **OpenCV**: CUDA-accelerated (libopencv4tegra)
+
+**Do NOT install numpy or opencv-python via pip** - they will fail to compile or be much slower than the system versions.
+
 ## Important: Ultralytics Limitation
 
 ⚠️ **Ultralytics YOLOv8 requires Python 3.7+**, which is not available on Jetson TX1's default Ubuntu 16.04.
