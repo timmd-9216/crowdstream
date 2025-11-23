@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Run Simple Cosmic Visualizer (no browser needed)
-# Uses tkinter (pre-installed, no compilation)
+# Run GPU-Accelerated Cosmic Visualizer (no browser needed)
+# Uses pyglet + OpenGL (Maxwell GPU rendering)
 
 cd "$(dirname "$0")"
 
-echo "=== Simple Cosmic Visualizer ==="
-echo "Uses tkinter (no browser, no compilation needed)"
+echo "=== GPU Cosmic Visualizer ==="
+echo "Uses pyglet + OpenGL (Maxwell GPU rendering)"
 echo ""
 
 # Check if venv exists
@@ -19,17 +19,23 @@ fi
 # Activate venv
 source venv/bin/activate
 
-# Check if python-osc is installed
+# Check if dependencies are installed
 if ! python -c "import pythonosc" 2>/dev/null; then
     echo "Installing dependencies..."
-    pip install -r requirements-native.txt
+    pip install -r requirements-gpu.txt
 fi
 
-echo "Starting simple visualizer..."
+if ! python -c "import pyglet" 2>/dev/null; then
+    echo "Installing pyglet..."
+    pip install -r requirements-gpu.txt
+fi
+
+echo "Starting GPU visualizer..."
 echo ""
 echo "Controls:"
 echo "  ESC or Q - Quit"
+echo "  F - Toggle fullscreen"
 echo ""
 
-# Run simple visualizer (uses tkinter, pre-installed)
-python src/cosmic_simple_visualizer.py "$@"
+# Run GPU visualizer (uses pyglet + OpenGL)
+python src/cosmic_gpu_visualizer.py "$@"
