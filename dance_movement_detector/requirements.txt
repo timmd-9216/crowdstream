@@ -1,7 +1,11 @@
-# Compatible with Ubuntu 16.04 (glibc 2.23) and Python 3.8
-ultralytics==8.0.196
-opencv-python-headless==4.5.5.64
-numpy==1.21.6
-python-osc==1.8.3
-torch==1.13.1
-torchvision==0.14.1
+# Compatible with Jetson TX1 - Ubuntu 16.04 - Python 3.5.2
+# Note: Ultralytics requires Python 3.7+, using alternative YOLO implementation
+numpy==1.18.5
+opencv-python==4.2.0.32
+python-osc==1.7.4
+# PyTorch for Jetson TX1 (requires manual installation from NVIDIA)
+# Download from: https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048
+# torch==1.1.0 (install manually)
+# torchvision==0.3.0 (install manually)
+typing-extensions==3.7.4.3
+pillow==6.2.2

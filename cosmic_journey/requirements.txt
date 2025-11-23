@@ -1,7 +1,14 @@
-# Compatible with Ubuntu 16.04 (glibc 2.23) and Python 3.8
-flask==2.3.3
-flask-socketio==5.3.0
-python-socketio==5.9.0
-python-osc==1.8.3
-werkzeug==2.3.7
-eventlet==0.33.3
+# Compatible with Jetson TX1 - Ubuntu 16.04 - Python 3.5.2
+flask==1.1.4
+flask-socketio==4.3.2
+python-socketio==4.6.1
+python-osc==1.7.4
+werkzeug==1.0.1
+python-engineio==3.14.2
+eventlet==0.30.2
+markupsafe==1.1.1
+jinja2==2.11.3
+itsdangerous==1.1.0
+click==7.1.2
+six==1.16.0
+dnspython==1.16.0

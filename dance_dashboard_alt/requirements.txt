@@ -1,7 +1,9 @@
-# Compatible with Ubuntu 16.04 (glibc 2.23) and Python 3.8
-fastapi==0.95.2
-uvicorn==0.22.0
-python-osc==1.8.3
-jinja2==3.1.2
-starlette==0.27.0
-pydantic==1.10.12
+# Compatible with Jetson TX1 - Ubuntu 16.04 - Python 3.5.2
+# FastAPI requires Python 3.6+, using Flask as alternative
+flask==1.1.4
+python-osc==1.7.4
+jinja2==2.11.3
+werkzeug==1.0.1
+markupsafe==1.1.1
+itsdangerous==1.1.0
+click==7.1.2
