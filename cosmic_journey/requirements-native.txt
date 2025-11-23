@@ -1,10 +1,9 @@
-# Native OpenGL Visualizer Requirements for Jetson TX1
+# Simple Native Visualizer Requirements for Jetson TX1
 # Python 3.5.2 compatible
+# Uses tkinter (pre-installed, no compilation needed)
 
-# Core dependencies (same as web version)
+# Core dependencies
 python-osc==1.7.4
 
-# Native visualization (GPU-accelerated)
-pygame==1.9.6
-PyOpenGL==3.1.5
-PyOpenGL-accelerate==3.1.5
+# Note: tkinter is pre-installed with Python on Ubuntu 16.04
+# No additional packages needed!
