@@ -3,4 +3,4 @@
 # Uses OpenGL via pyglet (has pre-compiled wheels, no SDL2 needed)
 
 python-osc==1.7.4
-pyglet==1.3.2  # Last version with Python 3.5 support + wheel available
+pyglet==1.2.4  # Stable version with Python 3.5 support (no f-strings!)

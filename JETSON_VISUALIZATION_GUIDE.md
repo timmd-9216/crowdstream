@@ -12,7 +12,30 @@
 
 ## Recommended Approach
 
-### Option 1: GPU-Accelerated Chromium (Best)
+### Option 1: Native OpenGL Application (RECOMMENDED - Maximum Performance)
+
+Use pyglet with OpenGL directly on the GPU:
+
+```bash
+cd cosmic_journey
+source venv/bin/activate
+pip install -r requirements-gpu.txt
+./run-native-visualizer.sh
+```
+
+**Benefits:**
+- Direct GPU access via OpenGL
+- 30-60 FPS easily achievable
+- Lower latency and better performance
+- No browser compatibility issues
+- Pre-compiled wheels (no compilation needed)
+- Python 3.5.2 compatible
+
+**Implementation:**
+- See [cosmic_journey/README_NATIVE.md](cosmic_journey/README_NATIVE.md) for details
+- GPU visualizer: [cosmic_journey/src/cosmic_gpu_visualizer.py](cosmic_journey/src/cosmic_gpu_visualizer.py)
+
+### Option 2: GPU-Accelerated Chromium (Fallback)
 
 Launch Chromium with GPU acceleration:
 
@@ -36,31 +59,13 @@ chromium-browser \
 **Pros:**
 - Uses Maxwell GPU for rendering
 - Hardware-accelerated Canvas 2D
-- WebGL support (1.0 stable, 2.0 limited)
 - No code changes needed
 
 **Cons:**
 - Chromium 90 is old (May 2021)
-- Some WebGL 2.0 features missing
+- WebGL 2.0 limited/broken (planets don't show)
 - Security vulnerabilities
-
-### Option 2: Native OpenGL Application (Maximum Performance)
-
-Use Python with OpenGL directly on the GPU:
-
-```bash
-pip install PyOpenGL PyOpenGL_accelerate pygame
-```
-
-**Benefits:**
-- Direct GPU access via CUDA/OpenGL
-- 60 FPS easily achievable
-- Lower latency
-- Better performance
-
-**Drawbacks:**
-- Requires rewriting visualization code
-- More complex development
+- Lower performance than native
 
 ### Option 3: Electron/NW.js (Not Recommended)
 
@@ -248,32 +253,26 @@ Look for:
 - **60 FPS**: Possible with optimizations
 - **Below 24 FPS**: Reduce visual complexity
 
-## Alternative: Native Python Visualization
+## Native GPU Visualization (Implemented!)
 
-For maximum GPU performance, consider using:
+**GPU-accelerated visualizer using pyglet + OpenGL is now available:**
 
 ```bash
-pip install pygame PyOpenGL moderngl
+cd cosmic_journey
+./run-native-visualizer.sh
 ```
 
-**Example:**
-```python
-import pygame
-from pygame.locals import *
-from OpenGL.GL import *
+**Features:**
+- Uses Maxwell GPU directly via OpenGL
+- 300 stars, 4 planets, galaxy center, energy particles
+- 30-60 FPS on Jetson TX1
+- Python 3.5.2 compatible
+- No compilation required (pyglet has wheels)
+- Same OSC protocol as web version
 
-# Uses GPU directly
-pygame.init()
-display = (1280, 720)
-pygame.display.set_mode(display, DOUBLEBUF|OPENGL)
-
-# OpenGL rendering loop
-while True:
-    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
-    # ... GPU rendering ...
-    pygame.display.flip()
-    pygame.time.wait(16) # ~60 FPS
-```
+**See:**
+- [cosmic_journey/README_NATIVE.md](cosmic_journey/README_NATIVE.md) - Full documentation
+- [cosmic_journey/src/cosmic_gpu_visualizer.py](cosmic_journey/src/cosmic_gpu_visualizer.py) - Source code
 
 ## Troubleshooting
 
@@ -331,21 +330,23 @@ const CONFIG = {
 
 ## Summary
 
-**For Jetson TX1 + Chromium 90:**
+**For Jetson TX1:**
 
-✅ **Do:**
-- Use Canvas 2D (better than WebGL on old Chromium)
-- Enable GPU acceleration flags
+**RECOMMENDED: Native OpenGL visualizer**
+- Use `./run-native-visualizer.sh` in cosmic_journey/
+- Direct GPU rendering via pyglet + OpenGL
+- 30-60 FPS, no browser issues
+- Python 3.5.2 compatible
+- See [cosmic_journey/README_NATIVE.md](cosmic_journey/README_NATIVE.md)
+
+**FALLBACK: Chromium with GPU acceleration**
+- Use `./launch-chromium-jetson.sh http://localhost:8091`
+- Canvas 2D works, WebGL 2.0 has issues (planets don't show)
 - Target 30 FPS
 - Reduce visual complexity
 - Use `tegrastats` to monitor
 
-❌ **Don't:**
-- Use complex WebGL 2.0 features
-- Enable antialiasing
-- Use shadows/advanced effects
-- Run at 1080p+ resolution
-- Use heavy JavaScript frameworks
-
-**Best performance:** Native OpenGL Python app
-**Best convenience:** GPU-accelerated Chromium with optimized Canvas 2D
+**Performance monitoring:**
+- `tegrastats` - Check GR3D (GPU usage)
+- `glxinfo | grep "OpenGL"` - Verify OpenGL support
+- Target 30 FPS for stable performance

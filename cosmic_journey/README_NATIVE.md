@@ -3,11 +3,11 @@
 ## Why Native?
 
 Chromium 90 on Jetson TX1 has limited WebGL support. The **native visualizer uses OpenGL directly** for:
-- ✅ Full GPU acceleration (Maxwell 256 CUDA cores)
-- ✅ Better performance (30-60 FPS)
-- ✅ No browser compatibility issues
-- ✅ Lower memory usage
-- ✅ Direct GPU rendering
+- Full GPU acceleration (Maxwell 256 CUDA cores)
+- Better performance (30-60 FPS)
+- No browser compatibility issues
+- Lower memory usage
+- Direct GPU rendering
 
 ## Quick Start
 
@@ -15,9 +15,9 @@ Chromium 90 on Jetson TX1 has limited WebGL support. The **native visualizer use
 # Install dependencies (one time)
 cd cosmic_journey
 source venv/bin/activate
-pip install -r requirements-native.txt
+pip install -r requirements-gpu.txt
 
-# Run native visualizer
+# Run GPU visualizer
 ./run-native-visualizer.sh
 
 # Or with options
@@ -53,8 +53,8 @@ Same as web version:
 ## Performance
 
 **On Jetson TX1:**
-- Native: **30-60 FPS** ✅
-- Browser: **15-24 FPS** (with issues) ❌
+- Native GPU: **30-60 FPS**
+- Browser: **15-24 FPS** (with issues)
 
 ## Architecture
 
@@ -68,7 +68,7 @@ Same as web version:
 ┌─────────────────┐
 │ Native OpenGL   │
 │   Visualizer    │ ──► Direct GPU Rendering
-│  (pygame+GL)    │     (No Browser!)
+│  (pyglet+GL)    │     (No Browser!)
 └─────────────────┘
 ```
 
@@ -80,11 +80,9 @@ Same as web version:
 # - Mesa drivers
 # - X11
 
-# Python packages
-pygame==1.9.6           # Display + events
-PyOpenGL==3.1.5         # OpenGL bindings
-PyOpenGL-accelerate     # GPU acceleration
+# Python packages (requirements-gpu.txt)
 python-osc==1.7.4       # OSC protocol
+pyglet==1.3.2           # OpenGL windowing (has Python 3.5 wheels!)
 ```
 
 ## Installation on Jetson TX1
@@ -94,10 +92,10 @@ python-osc==1.7.4       # OSC protocol
 cd ~/dev/crowdstream
 ./setup-jetson-tx1.sh
 
-# 2. Install native dependencies
+# 2. Install GPU visualizer dependencies
 cd cosmic_journey
 source venv/bin/activate
-pip install -r requirements-native.txt
+pip install -r requirements-gpu.txt
 
 # 3. Run
 ./run-native-visualizer.sh
@@ -118,11 +116,11 @@ pip install -r requirements-native.txt
 
 ## Troubleshooting
 
-### ImportError: No module named pygame
+### ImportError: No module named pyglet
 
 ```bash
 source venv/bin/activate
-pip install pygame==1.9.6
+pip install pyglet==1.3.2
 ```
 
 ### OpenGL error
@@ -131,7 +129,7 @@ pip install pygame==1.9.6
 # Check OpenGL support
 glxinfo | grep "OpenGL version"
 
-# Should show: OpenGL version string: 4.5.0
+# Should show: OpenGL version string: 4.5.0 (or 3.3+)
 ```
 
 ### Black screen
@@ -187,13 +185,13 @@ python src/cosmic_server.py --osc-port 5008 --web-port 8092
 ## Code Structure
 
 ```python
-cosmic_native_visualizer.py
+cosmic_gpu_visualizer.py
 ├── CosmicState         # Shared state with OSC updates
 ├── Star                # Star field particles
 ├── Planet              # Orbiting planet objects
-└── NativeCosmicVisualizer
-    ├── init_pygame()   # Setup OpenGL context
-    ├── render()        # Main render loop (30 FPS)
+└── GPUCosmicVisualizer (pyglet.window.Window)
+    ├── setup_opengl()  # Setup OpenGL context
+    ├── on_draw()       # Main render loop (30 FPS)
     ├── draw_stars()    # Star field rendering
     ├── draw_planets()  # Planet orbits + spheres
     ├── draw_galaxy_center()  # Spiral galaxy
@@ -204,7 +202,7 @@ cosmic_native_visualizer.py
 
 ### 1. Reduce Star Count
 
-Edit `cosmic_native_visualizer.py`:
+Edit `cosmic_gpu_visualizer.py`:
 
 ```python
 self.create_stars(count=200)  # Default: 300
@@ -218,10 +216,10 @@ self.create_stars(count=200)  # Default: 300
 
 ### 3. Disable Effects
 
-Comment out in `render()`:
+Comment out in `on_draw()`:
 
 ```python
-# self.draw_energy_field()  # Expensive
+# self.draw_energy_field()  # Expensive particle system
 ```
 
 ### 4. Simplify Planets
@@ -261,7 +259,7 @@ def create_planets(self):
 
 ### Adjust Camera
 
-Edit in `render()`:
+Edit in `on_draw()`:
 
 ```python
 gluLookAt(
