@@ -11,24 +11,29 @@ from ultralytics import YOLO
 import time
 import json
 from collections import defaultdict, deque
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Tuple
 from pythonosc import udp_client
 import argparse
 
 
-@dataclass
-class MovementStats:
+class MovementStats(object):
     """Statistics for movement analysis"""
-    timestamp: float
-    total_movement: float
-    arm_movement: float
-    leg_movement: float
-    head_movement: float
-    person_count: int
+    def __init__(self, timestamp, total_movement, arm_movement, leg_movement, head_movement, person_count):
+        self.timestamp = timestamp
+        self.total_movement = total_movement
+        self.arm_movement = arm_movement
+        self.leg_movement = leg_movement
+        self.head_movement = head_movement
+        self.person_count = person_count
 
     def to_dict(self):
-        return asdict(self)
+        return {
+            'timestamp': self.timestamp,
+            'total_movement': self.total_movement,
+            'arm_movement': self.arm_movement,
+            'leg_movement': self.leg_movement,
+            'head_movement': self.head_movement,
+            'person_count': self.person_count
+        }
 
 
 class BodyPartTracker:
@@ -51,19 +56,19 @@ class BodyPartTracker:
     LEG_KEYPOINTS = [11, 12, 13, 14, 15, 16]  # hips, knees, ankles
     HEAD_KEYPOINTS = [0, 1, 2, 3, 4]  # nose, eyes, ears
 
-    def __init__(self, history_size: int = 10):
+    def __init__(self, history_size=10):
         """
         Args:
             history_size: Number of frames to keep for movement calculation
         """
         self.history_size = history_size
-        self.pose_history: Dict[int, deque] = defaultdict(lambda: deque(maxlen=history_size))
+        self.pose_history = defaultdict(lambda: deque(maxlen=history_size))
 
-    def update(self, person_id: int, keypoints: np.ndarray):
+    def update(self, person_id, keypoints):
         """Update pose history for a person"""
         self.pose_history[person_id].append(keypoints.copy())
 
-    def calculate_movement(self, person_id: int, keypoint_indices: List[int]) -> float:
+    def calculate_movement(self, person_id, keypoint_indices):
         """Calculate movement for specific keypoints"""
         if person_id not in self.pose_history or len(self.pose_history[person_id]) < 2:
             return 0.0
@@ -95,19 +100,19 @@ class BodyPartTracker:
 
         return total_movement / max(count, 1)
 
-    def get_arm_movement(self, person_id: int) -> float:
+    def get_arm_movement(self, person_id):
         """Calculate arm movement"""
         return self.calculate_movement(person_id, self.ARM_KEYPOINTS)
 
-    def get_leg_movement(self, person_id: int) -> float:
+    def get_leg_movement(self, person_id):
         """Calculate leg movement"""
         return self.calculate_movement(person_id, self.LEG_KEYPOINTS)
 
-    def get_head_movement(self, person_id: int) -> float:
+    def get_head_movement(self, person_id):
         """Calculate head movement"""
         return self.calculate_movement(person_id, self.HEAD_KEYPOINTS)
 
-    def get_total_movement(self, person_id: int) -> float:
+    def get_total_movement(self, person_id):
         """Calculate total body movement"""
         all_keypoints = list(range(17))  # All YOLO pose keypoints
         return self.calculate_movement(person_id, all_keypoints)
@@ -163,15 +168,15 @@ class DanceMovementDetector:
         self.cap = cv2.VideoCapture(self.video_source)
 
         if not self.cap.isOpened():
-            raise RuntimeError(f"Cannot open video source: {self.video_source}")
+            raise RuntimeError("Cannot open video source: {}".format(self.video_source))
 
-        print(f"Starting dance movement detection...")
-        print(f"Video source: {self.video_source}")
-        print(f"Message interval: {self.message_interval}s")
-        print(f"OSC destinations ({len(self.osc_destinations)}):")
+        print("Starting dance movement detection...")
+        print("Video source: {}".format(self.video_source))
+        print("Message interval: {}s".format(self.message_interval))
+        print("OSC destinations ({}):".format(len(self.osc_destinations)))
         for i, dest in enumerate(self.osc_destinations, 1):
-            desc = f" ({dest['description']})" if dest['description'] else ""
-            print(f"  {i}. {dest['host']}:{dest['port']}{desc}")
+            desc = " ({})".format(dest['description']) if dest['description'] else ""
+            print("  {}. {}:{}{}".format(i, dest['host'], dest['port'], desc))
         print("\nPress 'q' to quit\n")
 
         try:
@@ -230,10 +235,10 @@ class DanceMovementDetector:
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
-    def _send_movement_report(self, active_ids: set, timestamp: float):
+    def _send_movement_report(self, active_ids, timestamp):
         """Calculate and send movement statistics"""
         if not active_ids:
-            print(f"[{time.strftime('%H:%M:%S')}] No dancers detected")
+            print("[{}] No dancers detected".format(time.strftime('%H:%M:%S')))
             return
 
         # Aggregate movement across all detected people
@@ -263,11 +268,14 @@ class DanceMovementDetector:
         self._send_osc_messages(stats)
 
         # Print to console
-        print(f"[{time.strftime('%H:%M:%S')}] People: {stats.person_count} | "
-              f"Total: {stats.total_movement:.1f} | "
-              f"Arms: {stats.arm_movement:.1f} | "
-              f"Legs: {stats.leg_movement:.1f} | "
-              f"Head: {stats.head_movement:.1f}")
+        print("[{}] People: {} | Total: {:.1f} | Arms: {:.1f} | Legs: {:.1f} | Head: {:.1f}".format(
+            time.strftime('%H:%M:%S'),
+            stats.person_count,
+            stats.total_movement,
+            stats.arm_movement,
+            stats.leg_movement,
+            stats.head_movement
+        ))
 
         # Save to file if configured
         if self.config.get('save_to_file', False):
@@ -291,20 +299,20 @@ class DanceMovementDetector:
                     # Silently continue if skeleton visualizer is not running
                     pass
 
-    def _send_osc_messages(self, stats: MovementStats):
+    def _send_osc_messages(self, stats):
         """Send movement statistics via OSC to all destinations"""
         base_address = self.config.get('osc_base_address', '/dance')
 
         # Send to all OSC clients
         for client in self.osc_clients:
             # Convert to native Python types for OSC compatibility
-            client.send_message(f"{base_address}/person_count", int(stats.person_count))
-            client.send_message(f"{base_address}/total_movement", float(stats.total_movement))
-            client.send_message(f"{base_address}/arm_movement", float(stats.arm_movement))
-            client.send_message(f"{base_address}/leg_movement", float(stats.leg_movement))
-            client.send_message(f"{base_address}/head_movement", float(stats.head_movement))
+            client.send_message("{}/person_count".format(base_address), int(stats.person_count))
+            client.send_message("{}/total_movement".format(base_address), float(stats.total_movement))
+            client.send_message("{}/arm_movement".format(base_address), float(stats.arm_movement))
+            client.send_message("{}/leg_movement".format(base_address), float(stats.leg_movement))
+            client.send_message("{}/head_movement".format(base_address), float(stats.head_movement))
 
-    def _save_stats(self, stats: MovementStats):
+    def _save_stats(self, stats):
         """Save statistics to JSON file"""
         filename = self.config.get('output_file', 'movement_stats.json')
 
@@ -313,7 +321,7 @@ class DanceMovementDetector:
                 json.dump(stats.to_dict(), f)
                 f.write('\n')
         except Exception as e:
-            print(f"Error saving stats: {e}")
+            print("Error saving stats: {}".format(e))
 
 
 def main():
@@ -339,7 +347,7 @@ def main():
         with open(args.config, 'r') as f:
             config = json.load(f)
     except FileNotFoundError:
-        print(f"Config file not found: {args.config}, using defaults")
+        print("Config file not found: {}, using defaults".format(args.config))
         config = {
             'video_source': 0,
             'message_interval': 10.0,
