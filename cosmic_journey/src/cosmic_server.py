@@ -89,11 +89,11 @@ class CosmicVisualizerServer(object):
         """Setup OSC message handlers"""
         base = "/dance"
 
-        self.osc_dispatcher.map(f"{base}/person_count", self._handle_person_count)
-        self.osc_dispatcher.map(f"{base}/total_movement", self._handle_total_movement)
-        self.osc_dispatcher.map(f"{base}/arm_movement", self._handle_arm_movement)
-        self.osc_dispatcher.map(f"{base}/leg_movement", self._handle_leg_movement)
-        self.osc_dispatcher.map(f"{base}/head_movement", self._handle_head_movement)
+        self.osc_dispatcher.map("{}/person_count".format(base), self._handle_person_count)
+        self.osc_dispatcher.map("{}/total_movement".format(base), self._handle_total_movement)
+        self.osc_dispatcher.map("{}/arm_movement".format(base), self._handle_arm_movement)
+        self.osc_dispatcher.map("{}/leg_movement".format(base), self._handle_leg_movement)
+        self.osc_dispatcher.map("{}/head_movement".format(base), self._handle_head_movement)
 
     def _handle_person_count(self, address, *args):
         with self.lock:
@@ -155,11 +155,12 @@ class CosmicVisualizerServer(object):
             self.socketio.emit('update', state_dict)
             self.last_broadcast_time = current_time
 
-            print(f"[{datetime.fromtimestamp(self.state.timestamp).strftime('%H:%M:%S')}] "
-                  f"Galaxy: {self.state.galaxy_rotation:.2f} | "
-                  f"Asteroids: {self.state.asteroid_speed:.2f} | "
-                  f"Energy: {self.state.cosmic_energy:.2f} | "
-                  f"Zoom: {self.state.cosmic_zoom:.2f}")
+            print("[{}] Galaxy: {:.2f} | Asteroids: {:.2f} | Energy: {:.2f} | Zoom: {:.2f}".format(
+                datetime.fromtimestamp(self.state.timestamp).strftime('%H:%M:%S'),
+                self.state.galaxy_rotation,
+                self.state.asteroid_speed,
+                self.state.cosmic_energy,
+                self.state.cosmic_zoom))
 
     def setup_flask_routes(self):
         """Setup Flask routes"""
@@ -194,7 +195,7 @@ class CosmicVisualizerServer(object):
             ('0.0.0.0', self.osc_port),
             self.osc_dispatcher
         )
-        print(f"OSC server listening on port {self.osc_port}")
+        print("OSC server listening on port {}".format(self.osc_port))
         self.osc_server.serve_forever()
 
     def start(self):
@@ -202,8 +203,8 @@ class CosmicVisualizerServer(object):
         self.osc_thread = threading.Thread(target=self.start_osc_server, daemon=True)
         self.osc_thread.start()
 
-        print(f"Cosmic visualizer starting on http://localhost:{self.web_port}")
-        print(f"Open your browser to http://localhost:{self.web_port}")
+        print("Cosmic visualizer starting on http://localhost:{}".format(self.web_port))
+        print("Open your browser to http://localhost:{}".format(self.web_port))
         print("\nVisualization mapping:")
         print("  - Leg movement → Galaxy rotation")
         print("  - Arm movement → Asteroid speed")
@@ -229,8 +230,8 @@ def main():
     args = parser.parse_args()
 
     print("=== Cosmic Journey Visualizer ===")
-    print(f"OSC Port: {args.osc_port}")
-    print(f"Web Port: {args.web_port}")
+    print("OSC Port: {}".format(args.osc_port))
+    print("Web Port: {}".format(args.web_port))
     print("\nStarting servers...\n")
 
     server = CosmicVisualizerServer(
