@@ -2,7 +2,6 @@
 
 # Install dependencies for Movement Detector
 # Creates virtual environment and installs all requirements
-# Use install-rpi.sh for Raspberry Pi installations
 
 set -e
 
@@ -36,6 +35,4 @@ fi
 echo ""
 echo "Virtual environment ready at: venv/"
 echo "To activate: source venv/bin/activate"
-echo ""
-echo "Note: For Raspberry Pi, use install-rpi.sh instead"
 echo ""
