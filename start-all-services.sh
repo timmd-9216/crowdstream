@@ -149,9 +149,9 @@ case $VISUALIZER in
     blur_skeleton)
         cd blur_skeleton_visualizer
         if [ -d "venv" ]; then
-            venv/bin/python3 src/server.py --osc-port 5009 --port 8092 --blur 25 > ../logs/blur.log 2>&1 &
+            venv/bin/python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > ../logs/blur.log 2>&1 &
         else
-            python3 src/server.py --osc-port 5009 --port 8092 --blur 25 > ../logs/blur.log 2>&1 &
+            python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > ../logs/blur.log 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Blur Skeleton started (PID: $VISUALIZER_PID) on http://localhost:8092"

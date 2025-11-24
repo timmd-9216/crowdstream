@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Blur video visualizer with skeleton overlay"""
+"""Blur video visualizer with skeleton overlay and space elements"""
 
 from __future__ import annotations
 
@@ -7,12 +7,14 @@ import argparse
 import asyncio
 import base64
 import json
+import math
+import random
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
 
 import cv2
 import numpy as np
@@ -39,10 +41,83 @@ class PoseData:
         }
 
 
+@dataclass
+class MovementData:
+    """Movement intensity data from OSC"""
+    timestamp: float
+    head_movement: float = 0.0
+    arm_movement: float = 0.0
+    leg_movement: float = 0.0
+    total_movement: float = 0.0
+
+
+class SpaceParticle:
+    """A particle in space (star, planet, etc)"""
+    def __init__(self, x: float, y: float, size: float, color: Tuple[int, int, int],
+                 speed: float, particle_type: str):
+        self.x = x
+        self.y = y
+        self.base_size = size
+        self.size = size
+        self.color = color
+        self.speed = speed
+        self.type = particle_type  # 'star', 'planet', 'nebula'
+        self.angle = random.uniform(0, 2 * math.pi)
+        self.phase = random.uniform(0, 2 * math.pi)
+
+    def update(self, movement_intensity: float, frame_width: int, frame_height: int):
+        """Update particle position and size based on movement"""
+        # Move based on speed and movement intensity
+        movement_factor = 1.0 + (movement_intensity / 100.0) * 3.0
+        self.x += math.cos(self.angle) * self.speed * movement_factor
+        self.y += math.sin(self.angle) * self.speed * movement_factor
+
+        # Wrap around screen
+        if self.x < 0:
+            self.x = frame_width
+        elif self.x > frame_width:
+            self.x = 0
+        if self.y < 0:
+            self.y = frame_height
+        elif self.y > frame_height:
+            self.y = 0
+
+        # Pulse size based on movement
+        self.phase += 0.1
+        pulse = math.sin(self.phase) * 0.3 + 1.0
+        self.size = self.base_size * pulse * (1.0 + movement_intensity / 200.0)
+
+    def draw(self, frame: np.ndarray, alpha: float = 0.6):
+        """Draw particle on frame"""
+        overlay = frame.copy()
+        center = (int(self.x), int(self.y))
+        radius = int(self.size)
+
+        if self.type == 'star':
+            # Draw star as bright point with glow
+            cv2.circle(overlay, center, radius, self.color, -1, cv2.LINE_AA)
+            cv2.circle(overlay, center, radius * 2, self.color, 1, cv2.LINE_AA)
+        elif self.type == 'planet':
+            # Draw planet with ring
+            cv2.circle(overlay, center, radius, self.color, -1, cv2.LINE_AA)
+            cv2.ellipse(overlay, center, (radius * 2, radius // 2), 0, 0, 360,
+                       self.color, 1, cv2.LINE_AA)
+        elif self.type == 'nebula':
+            # Draw nebula as soft cloud
+            for i in range(3):
+                offset_x = random.randint(-radius, radius)
+                offset_y = random.randint(-radius, radius)
+                pos = (center[0] + offset_x, center[1] + offset_y)
+                cv2.circle(overlay, pos, radius, self.color, -1, cv2.LINE_AA)
+
+        # Blend with original frame
+        cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
+
+
 class VideoBlurServer:
     """Receives video frames and poses via OSC, applies blur, streams to web."""
 
-    def __init__(self, osc_port: int, web_port: int, blur_amount: int = 25):
+    def __init__(self, osc_port: int, web_port: int, blur_amount: int = 51):
         self.osc_port = osc_port
         self.web_port = web_port
         self.blur_amount = blur_amount  # Kernel size for Gaussian blur
@@ -54,6 +129,15 @@ class VideoBlurServer:
         # Pose data storage
         self.poses: Dict[int, PoseData] = {}
         self.pose_lock = threading.Lock()
+
+        # Movement data storage
+        self.movement_data = MovementData(timestamp=time.time())
+        self.movement_lock = threading.Lock()
+        self.movement_history = deque(maxlen=30)  # 1 second at 30fps
+
+        # Space particles
+        self.particles: List[SpaceParticle] = []
+        self.particle_lock = threading.Lock()
 
         # WebSocket clients
         self.clients: Set[WebSocket] = set()
@@ -80,8 +164,11 @@ class VideoBlurServer:
         # Pose keypoints handler
         self.osc_dispatcher.map(f"{base}/pose/person/*/keypoints", self._handle_pose_keypoints)
 
-        # Video frame handler (if detector sends frames)
-        self.osc_dispatcher.map(f"{base}/video/frame", self._handle_video_frame)
+        # Movement handlers
+        self.osc_dispatcher.map(f"{base}/total_movement", self._handle_total_movement)
+        self.osc_dispatcher.map(f"{base}/head_movement", self._handle_head_movement)
+        self.osc_dispatcher.map(f"{base}/arm_movement", self._handle_arm_movement)
+        self.osc_dispatcher.map(f"{base}/leg_movement", self._handle_leg_movement)
 
     def _handle_pose_keypoints(self, address: str, *args):
         """Handle pose keypoints from OSC"""
@@ -105,11 +192,66 @@ class VideoBlurServer:
         except Exception as e:
             print(f"Error handling pose keypoints: {e}")
 
-    def _handle_video_frame(self, address: str, *args):
-        """Handle video frame from OSC (if implemented in detector)"""
-        # This would require detector to send frames via OSC
-        # For now, we'll rely on detector having a video stream endpoint
-        pass
+    def _handle_total_movement(self, address: str, value: float):
+        """Handle total movement intensity"""
+        with self.movement_lock:
+            self.movement_data.total_movement = value
+            self.movement_data.timestamp = time.time()
+
+    def _handle_head_movement(self, address: str, value: float):
+        """Handle head movement intensity"""
+        with self.movement_lock:
+            self.movement_data.head_movement = value
+
+    def _handle_arm_movement(self, address: str, value: float):
+        """Handle arm movement intensity"""
+        with self.movement_lock:
+            self.movement_data.arm_movement = value
+
+    def _handle_leg_movement(self, address: str, value: float):
+        """Handle leg movement intensity"""
+        with self.movement_lock:
+            self.movement_data.leg_movement = value
+
+    def initialize_particles(self, width: int, height: int):
+        """Initialize space particles"""
+        with self.particle_lock:
+            self.particles = []
+
+            # Stars (many, small, fast) - react to head movement
+            for _ in range(100):
+                self.particles.append(SpaceParticle(
+                    x=random.uniform(0, width),
+                    y=random.uniform(0, height),
+                    size=random.uniform(1, 3),
+                    color=(255, 255, 255),
+                    speed=random.uniform(0.5, 2.0),
+                    particle_type='star'
+                ))
+
+            # Planets (few, medium, medium speed) - react to arm movement
+            for _ in range(10):
+                self.particles.append(SpaceParticle(
+                    x=random.uniform(0, width),
+                    y=random.uniform(0, height),
+                    size=random.uniform(10, 25),
+                    color=(random.randint(100, 255), random.randint(100, 255),
+                          random.randint(100, 255)),
+                    speed=random.uniform(0.2, 1.0),
+                    particle_type='planet'
+                ))
+
+            # Nebulas (few, large, slow) - react to leg movement
+            for _ in range(5):
+                self.particles.append(SpaceParticle(
+                    x=random.uniform(0, width),
+                    y=random.uniform(0, height),
+                    size=random.uniform(30, 60),
+                    color=(random.randint(50, 150), random.randint(50, 150),
+                          random.randint(100, 255)),
+                    speed=random.uniform(0.1, 0.5),
+                    particle_type='nebula'
+                ))
 
     def setup_routes(self):
         """Setup FastAPI routes"""
@@ -144,8 +286,13 @@ class VideoBlurServer:
 
     async def broadcast_frames(self):
         """Continuously broadcast blurred frames with skeletons to clients"""
-        # Simulated camera for now (detector will provide real frames)
         cap = cv2.VideoCapture(0)
+
+        # Get frame dimensions and initialize particles
+        ret, test_frame = cap.read()
+        if ret:
+            h, w = test_frame.shape[:2]
+            self.initialize_particles(w, h)
 
         try:
             while self.running:
@@ -154,18 +301,45 @@ class VideoBlurServer:
                     await asyncio.sleep(0.1)
                     continue
 
-                # Apply blur
+                h, w = frame.shape[:2]
+
+                # Apply heavy blur
                 blurred = cv2.GaussianBlur(frame, (self.blur_amount, self.blur_amount), 0)
 
-                # Draw skeletons on blurred frame
+                # Additional blur pass for more effect
+                blurred = cv2.GaussianBlur(blurred, (self.blur_amount, self.blur_amount), 0)
+
+                # Get current movement data
+                with self.movement_lock:
+                    head_mov = self.movement_data.head_movement
+                    arm_mov = self.movement_data.arm_movement
+                    leg_mov = self.movement_data.leg_movement
+                    total_mov = self.movement_data.total_movement
+
+                # Update and draw space particles
+                with self.particle_lock:
+                    for particle in self.particles:
+                        if particle.type == 'star':
+                            particle.update(head_mov, w, h)
+                        elif particle.type == 'planet':
+                            particle.update(arm_mov, w, h)
+                        elif particle.type == 'nebula':
+                            particle.update(leg_mov, w, h)
+
+                        particle.draw(blurred, alpha=0.4)
+
+                # Draw skeletons with YOLO keypoints
                 with self.pose_lock:
                     for person_id, pose in list(self.poses.items()):
-                        # Remove old poses (older than 1 second)
+                        # Remove old poses
                         if time.time() - pose.timestamp > 1.0:
                             del self.poses[person_id]
                             continue
 
                         self._draw_skeleton(blurred, pose.keypoints)
+
+                # Add movement intensity overlay
+                self._draw_movement_overlay(blurred, head_mov, arm_mov, leg_mov)
 
                 # Encode frame to JPEG
                 _, buffer = cv2.imencode('.jpg', blurred, [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -174,7 +348,13 @@ class VideoBlurServer:
                 # Broadcast to all clients
                 message = json.dumps({
                     "type": "frame",
-                    "data": frame_b64
+                    "data": frame_b64,
+                    "movement": {
+                        "head": head_mov,
+                        "arms": arm_mov,
+                        "legs": leg_mov,
+                        "total": total_mov
+                    }
                 })
 
                 with self.clients_lock:
@@ -185,7 +365,6 @@ class VideoBlurServer:
                         except:
                             disconnected.add(client)
 
-                    # Remove disconnected clients
                     self.clients -= disconnected
 
                 # Control frame rate (~30 FPS)
@@ -195,7 +374,7 @@ class VideoBlurServer:
             cap.release()
 
     def _draw_skeleton(self, frame: np.ndarray, keypoints: List[List[float]]):
-        """Draw skeleton lines on frame with high intensity"""
+        """Draw skeleton lines and keypoints on frame with high intensity"""
         # YOLO pose keypoint connections
         connections = [
             (0, 1), (0, 2), (1, 3), (2, 4),  # Head
@@ -206,7 +385,7 @@ class VideoBlurServer:
 
         h, w = frame.shape[:2]
 
-        # Draw connections
+        # Draw connections with glow effect
         for start_idx, end_idx in connections:
             if start_idx < len(keypoints) and end_idx < len(keypoints):
                 start_kp = keypoints[start_idx]
@@ -218,14 +397,69 @@ class VideoBlurServer:
                     start_point = (int(start_kp[0] * w), int(start_kp[1] * h))
                     end_point = (int(end_kp[0] * w), int(end_kp[1] * h))
 
-                    # Draw thick, bright line
+                    # Draw glow (thicker, semi-transparent)
+                    overlay = frame.copy()
+                    cv2.line(overlay, start_point, end_point, (0, 255, 255), 8, cv2.LINE_AA)
+                    cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
+
+                    # Draw main line (bright and thick)
                     cv2.line(frame, start_point, end_point, (0, 255, 255), 4, cv2.LINE_AA)
 
-        # Draw keypoints
+        # Draw keypoints with glow
         for kp in keypoints:
             if kp[2] > 0.5:
                 point = (int(kp[0] * w), int(kp[1] * h))
-                cv2.circle(frame, point, 6, (0, 255, 0), -1, cv2.LINE_AA)
+
+                # Outer glow
+                cv2.circle(frame, point, 12, (0, 255, 0), 2, cv2.LINE_AA)
+
+                # Inner bright circle
+                cv2.circle(frame, point, 8, (0, 255, 0), -1, cv2.LINE_AA)
+
+                # Center highlight
+                cv2.circle(frame, point, 4, (255, 255, 255), -1, cv2.LINE_AA)
+
+    def _draw_movement_overlay(self, frame: np.ndarray, head: float, arms: float, legs: float):
+        """Draw movement intensity bars"""
+        h, w = frame.shape[:2]
+
+        bar_width = 200
+        bar_height = 20
+        x_start = 20
+        y_start = h - 100
+
+        # Background
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (x_start - 10, y_start - 10),
+                     (x_start + bar_width + 10, y_start + 80), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
+
+        # Head movement (stars)
+        self._draw_bar(frame, x_start, y_start, bar_width, bar_height,
+                      head, (255, 255, 255), "Head")
+
+        # Arm movement (planets)
+        self._draw_bar(frame, x_start, y_start + 25, bar_width, bar_height,
+                      arms, (255, 165, 0), "Arms")
+
+        # Leg movement (nebulas)
+        self._draw_bar(frame, x_start, y_start + 50, bar_width, bar_height,
+                      legs, (147, 112, 219), "Legs")
+
+    def _draw_bar(self, frame: np.ndarray, x: int, y: int, width: int, height: int,
+                  value: float, color: Tuple[int, int, int], label: str):
+        """Draw a single movement bar"""
+        # Border
+        cv2.rectangle(frame, (x, y), (x + width, y + height), (255, 255, 255), 1)
+
+        # Fill
+        fill_width = int((value / 100.0) * width)
+        if fill_width > 0:
+            cv2.rectangle(frame, (x, y), (x + fill_width, y + height), color, -1)
+
+        # Label
+        cv2.putText(frame, f"{label}: {value:.1f}", (x, y - 5),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
     def start_osc_server(self):
         """Start OSC server in separate thread"""
@@ -274,6 +508,7 @@ class VideoBlurServer:
         print(f"Starting Blur Skeleton Visualizer...")
         print(f"OSC port: {self.osc_port}")
         print(f"Web interface: http://0.0.0.0:{self.web_port}")
+        print(f"Blur amount: {self.blur_amount}")
 
         uvicorn.run(
             self.app,
@@ -288,7 +523,7 @@ def main():
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     parser.add_argument("--port", type=int, default=8092, help="Web port to bind to")
     parser.add_argument("--osc-port", type=int, default=5009, help="OSC port to listen on")
-    parser.add_argument("--blur", type=int, default=25, help="Blur amount (kernel size, must be odd)")
+    parser.add_argument("--blur", type=int, default=51, help="Blur amount (kernel size, must be odd)")
 
     args = parser.parse_args()
 
