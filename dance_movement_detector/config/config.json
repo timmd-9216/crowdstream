@@ -1,0 +1,11 @@
+{
+  "video_source": 0,
+  "message_interval": 10.0,
+  "osc_host": "127.0.0.1",
+  "osc_port": 5005,
+  "osc_base_address": "/dance",
+  "history_frames": 10,
+  "show_video": true,
+  "save_to_file": false,
+  "output_file": "movement_stats.json"
+}

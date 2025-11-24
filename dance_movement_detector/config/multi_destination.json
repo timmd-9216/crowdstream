@@ -1,0 +1,31 @@
+{
+  "video_source": 0,
+  "message_interval": 1.0,
+  "osc_destinations": [
+    {
+      "host": "127.0.0.1",
+      "port": 5005,
+      "description": "Dashboard"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 5006,
+      "description": "Space Visualizer"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 5007,
+      "description": "Skeleton Visualizer"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 5008,
+      "description": "Cosmic Skeleton Visualizer"
+    }
+  ],
+  "osc_base_address": "/dance",
+  "history_frames": 10,
+  "show_video": true,
+  "save_to_file": false,
+  "output_file": "movement_stats.json"
+}
