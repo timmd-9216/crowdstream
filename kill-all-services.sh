@@ -37,13 +37,14 @@ kill_service "FastAPI Dashboard" "dance_dashboard_alt/src/server.py"
 kill_service "Cosmic Skeleton" "cosmic_skeleton/src/server.py"
 kill_service "Cosmic Journey" "cosmic_journey/src/cosmic_server.py"
 kill_service "Space Visualizer" "visualizer_server.py"
+kill_service "Blur Skeleton Visualizer" "blur_skeleton_visualizer/src/server.py"
 kill_service "Service Controller" "service_manager.py"
 
 echo ""
 echo "=== Verifying Ports ==="
 
 # Check if ports are free and kill processes using them
-for port in 5005 5006 5007 8000 8080 8081 8082 8090 8091; do
+for port in 5005 5006 5007 5008 5009 8000 8080 8081 8082 8090 8091 8092; do
     pids=$(lsof -ti:$port 2>/dev/null)
     if [ ! -z "$pids" ]; then
         echo "⚠ Port $port still in use (PIDs: $pids)"
