@@ -166,18 +166,22 @@ esac
 cd ..
 sleep 2
 
-# Start Detector (always)
-echo "Starting Movement Detector..."
-cd dance_movement_detector
-if [ -d "venv" ]; then
-    venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/multi_destination.json > ../logs/detector.log 2>&1 &
+# Start Detector (skip for blur_skeleton since it's autonomous)
+if [ "$VISUALIZER" != "blur_skeleton" ]; then
+    echo "Starting Movement Detector..."
+    cd dance_movement_detector
+    if [ -d "venv" ]; then
+        venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/multi_destination.json > ../logs/detector.log 2>&1 &
+    else
+        python3 src/dance_movement_detector.py --config config/multi_destination.json > ../logs/detector.log 2>&1 &
+    fi
+    DETECTOR_PID=$!
+    echo "  Detector started (PID: $DETECTOR_PID)"
+    cd ..
+    sleep 2
 else
-    python3 src/dance_movement_detector.py --config config/multi_destination.json > ../logs/detector.log 2>&1 &
+    echo "Skipping Movement Detector (blur_skeleton is autonomous)"
 fi
-DETECTOR_PID=$!
-echo "  Detector started (PID: $DETECTOR_PID)"
-cd ..
-sleep 2
 
 echo ""
 echo "=== Services Started ==="
@@ -203,7 +207,9 @@ case $VISUALIZER in
         ;;
 esac
 
-echo "🤖 Detector:           Sending to all OSC ports"
+if [ "$VISUALIZER" != "blur_skeleton" ]; then
+    echo "🤖 Detector:           Sending to all OSC ports"
+fi
 echo ""
 
 # Show PIDs
@@ -212,7 +218,9 @@ if [ "$START_DASHBOARD" = true ]; then
     echo "  Dashboard:  $DASHBOARD_PID"
 fi
 echo "  Visualizer: $VISUALIZER_PID"
-echo "  Detector:   $DETECTOR_PID"
+if [ "$VISUALIZER" != "blur_skeleton" ]; then
+    echo "  Detector:   $DETECTOR_PID"
+fi
 echo ""
 
 # Show log commands
@@ -221,7 +229,9 @@ if [ "$START_DASHBOARD" = true ]; then
     echo "  tail -f logs/dashboard_alt.log"
 fi
 echo "  tail -f logs/$VISUALIZER_LOG"
-echo "  tail -f logs/detector.log"
+if [ "$VISUALIZER" != "blur_skeleton" ]; then
+    echo "  tail -f logs/detector.log"
+fi
 echo ""
 echo "To stop all services:"
 echo "  ./kill-all-services.sh"
