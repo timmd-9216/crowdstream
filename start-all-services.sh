@@ -6,26 +6,26 @@
 show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
-    echo "Start dance movement detector and optional dashboard/visualizer services."
+    echo "Start dance movement detector, dashboard (default), and visualizer services."
     echo ""
     echo "Options:"
-    echo "  --dashboard              Start the FastAPI dashboard (optional)"
     echo "  --visualizer VISUALIZER  Start a visualizer (required, one of):"
     echo "                           - cosmic_skeleton"
     echo "                           - cosmic_journey"
     echo "                           - space_visualizer"
     echo "                           - blur_skeleton"
+    echo "  --no-dashboard           Skip starting the dashboard (dashboard runs by default)"
     echo "  -h, --help               Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0 --visualizer cosmic_skeleton"
-    echo "  $0 --dashboard --visualizer space_visualizer"
-    echo "  $0 --visualizer cosmic_journey --dashboard"
+    echo "  $0 --visualizer space_visualizer"
+    echo "  $0 --visualizer blur_skeleton --no-dashboard"
     echo ""
 }
 
 # Default values
-START_DASHBOARD=false
+START_DASHBOARD=true
 VISUALIZER=""
 DASHBOARD_PID=""
 VISUALIZER_PID=""
@@ -34,7 +34,12 @@ DETECTOR_PID=""
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --no-dashboard)
+            START_DASHBOARD=false
+            shift
+            ;;
         --dashboard)
+            # For backwards compatibility
             START_DASHBOARD=true
             shift
             ;;

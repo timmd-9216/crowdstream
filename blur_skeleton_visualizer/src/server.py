@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pythonosc import dispatcher, osc_server
+from ultralytics import YOLO
 import uvicorn
 
 
@@ -115,22 +116,26 @@ class SpaceParticle:
 
 
 class VideoBlurServer:
-    """Receives video frames and poses via OSC, applies blur, streams to web."""
+    """Captures video, applies YOLO detection, blur effect, and streams to web."""
 
     def __init__(self, osc_port: int, web_port: int, blur_amount: int = 51):
         self.osc_port = osc_port
         self.web_port = web_port
         self.blur_amount = blur_amount  # Kernel size for Gaussian blur
 
+        # YOLO model for pose detection
+        self.model = YOLO('yolov8n-pose.pt')
+
         # Video frame storage
         self.current_frame = None
         self.frame_lock = threading.Lock()
 
-        # Pose data storage
+        # Pose data storage (from YOLO, not OSC)
         self.poses: Dict[int, PoseData] = {}
         self.pose_lock = threading.Lock()
 
-        # Movement data storage
+        # Movement tracking
+        self.pose_history: Dict[int, deque] = {}
         self.movement_data = MovementData(timestamp=time.time())
         self.movement_lock = threading.Lock()
         self.movement_history = deque(maxlen=30)  # 1 second at 30fps
@@ -143,11 +148,12 @@ class VideoBlurServer:
         self.clients: Set[WebSocket] = set()
         self.clients_lock = threading.Lock()
 
-        # OSC setup
+        # OSC setup (still needed for forwarding data to other services)
         self.osc_dispatcher = dispatcher.Dispatcher()
         self.setup_osc_handlers()
         self.osc_thread = None
         self.osc_server = None
+        self.osc_clients = []
 
         # FastAPI app
         self.app = FastAPI(title="Blur Skeleton Visualizer")
@@ -303,18 +309,58 @@ class VideoBlurServer:
 
                 h, w = frame.shape[:2]
 
+                # Run YOLO pose detection
+                results = self.model.track(frame, persist=True, verbose=False)
+
+                # Process YOLO results
+                current_poses = {}
+                if results[0].keypoints is not None:
+                    keypoints_data = results[0].keypoints.data.cpu().numpy()
+
+                    # Get tracking IDs if available
+                    if results[0].boxes.id is not None:
+                        track_ids = results[0].boxes.id.cpu().numpy().astype(int)
+                    else:
+                        track_ids = list(range(len(keypoints_data)))
+
+                    # Store poses and update movement tracking
+                    for person_id, kps in zip(track_ids, keypoints_data):
+                        # Normalize keypoints to 0-1 range
+                        normalized_kps = []
+                        for kp in kps:
+                            normalized_kps.append([
+                                float(kp[0] / w),  # x normalized
+                                float(kp[1] / h),  # y normalized
+                                float(kp[2])       # confidence
+                            ])
+
+                        current_poses[person_id] = PoseData(
+                            timestamp=time.time(),
+                            person_id=person_id,
+                            keypoints=normalized_kps
+                        )
+
+                        # Track pose history for movement calculation
+                        if person_id not in self.pose_history:
+                            self.pose_history[person_id] = deque(maxlen=10)
+                        self.pose_history[person_id].append(normalized_kps)
+
+                # Calculate movement from pose history
+                head_mov, arm_mov, leg_mov, total_mov = self._calculate_movement(current_poses.keys())
+
+                # Update movement data
+                with self.movement_lock:
+                    self.movement_data.head_movement = head_mov
+                    self.movement_data.arm_movement = arm_mov
+                    self.movement_data.leg_movement = leg_mov
+                    self.movement_data.total_movement = total_mov
+                    self.movement_data.timestamp = time.time()
+
                 # Apply heavy blur
                 blurred = cv2.GaussianBlur(frame, (self.blur_amount, self.blur_amount), 0)
 
                 # Additional blur pass for more effect
                 blurred = cv2.GaussianBlur(blurred, (self.blur_amount, self.blur_amount), 0)
-
-                # Get current movement data
-                with self.movement_lock:
-                    head_mov = self.movement_data.head_movement
-                    arm_mov = self.movement_data.arm_movement
-                    leg_mov = self.movement_data.leg_movement
-                    total_mov = self.movement_data.total_movement
 
                 # Update and draw space particles
                 with self.particle_lock:
@@ -329,14 +375,8 @@ class VideoBlurServer:
                         particle.draw(blurred, alpha=0.4)
 
                 # Draw skeletons with YOLO keypoints
-                with self.pose_lock:
-                    for person_id, pose in list(self.poses.items()):
-                        # Remove old poses
-                        if time.time() - pose.timestamp > 1.0:
-                            del self.poses[person_id]
-                            continue
-
-                        self._draw_skeleton(blurred, pose.keypoints)
+                for person_id, pose in current_poses.items():
+                    self._draw_skeleton(blurred, pose.keypoints)
 
                 # Add movement intensity overlay
                 self._draw_movement_overlay(blurred, head_mov, arm_mov, leg_mov)
@@ -372,6 +412,65 @@ class VideoBlurServer:
 
         finally:
             cap.release()
+
+    def _calculate_movement(self, active_person_ids) -> Tuple[float, float, float, float]:
+        """Calculate movement for head, arms, legs, and total"""
+        # YOLO keypoint indices
+        HEAD_KEYPOINTS = [0, 1, 2, 3, 4]  # nose, eyes, ears
+        ARM_KEYPOINTS = [5, 6, 7, 8, 9, 10]  # shoulders, elbows, wrists
+        LEG_KEYPOINTS = [11, 12, 13, 14, 15, 16]  # hips, knees, ankles
+
+        head_movement = 0.0
+        arm_movement = 0.0
+        leg_movement = 0.0
+        total_movement = 0.0
+
+        for person_id in active_person_ids:
+            if person_id not in self.pose_history or len(self.pose_history[person_id]) < 2:
+                continue
+
+            history = list(self.pose_history[person_id])
+
+            # Calculate movement between consecutive frames
+            for i in range(1, len(history)):
+                prev_frame = history[i-1]
+                curr_frame = history[i]
+
+                # Head movement
+                for kp_idx in HEAD_KEYPOINTS:
+                    if kp_idx < len(prev_frame) and kp_idx < len(curr_frame):
+                        prev_kp = prev_frame[kp_idx]
+                        curr_kp = curr_frame[kp_idx]
+                        if prev_kp[2] > 0.5 and curr_kp[2] > 0.5:
+                            dx = curr_kp[0] - prev_kp[0]
+                            dy = curr_kp[1] - prev_kp[1]
+                            distance = np.sqrt(dx*dx + dy*dy) * 1000  # Scale up for visibility
+                            head_movement += distance
+
+                # Arm movement
+                for kp_idx in ARM_KEYPOINTS:
+                    if kp_idx < len(prev_frame) and kp_idx < len(curr_frame):
+                        prev_kp = prev_frame[kp_idx]
+                        curr_kp = curr_frame[kp_idx]
+                        if prev_kp[2] > 0.5 and curr_kp[2] > 0.5:
+                            dx = curr_kp[0] - prev_kp[0]
+                            dy = curr_kp[1] - prev_kp[1]
+                            distance = np.sqrt(dx*dx + dy*dy) * 1000
+                            arm_movement += distance
+
+                # Leg movement
+                for kp_idx in LEG_KEYPOINTS:
+                    if kp_idx < len(prev_frame) and kp_idx < len(curr_frame):
+                        prev_kp = prev_frame[kp_idx]
+                        curr_kp = curr_frame[kp_idx]
+                        if prev_kp[2] > 0.5 and curr_kp[2] > 0.5:
+                            dx = curr_kp[0] - prev_kp[0]
+                            dy = curr_kp[1] - prev_kp[1]
+                            distance = np.sqrt(dx*dx + dy*dy) * 1000
+                            leg_movement += distance
+
+        total_movement = head_movement + arm_movement + leg_movement
+        return head_movement, arm_movement, leg_movement, total_movement
 
     def _draw_skeleton(self, frame: np.ndarray, keypoints: List[List[float]]):
         """Draw skeleton lines and keypoints on frame with high intensity"""
