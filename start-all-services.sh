@@ -137,9 +137,9 @@ case $VISUALIZER in
     space_visualizer)
         cd space_visualizer
         if [ -d "venv" ]; then
-            venv/bin/python3 src/server.py > ../logs/space.log 2>&1 &
+            venv/bin/python3 src/visualizer_server.py > ../logs/space.log 2>&1 &
         else
-            python3 src/server.py > ../logs/space.log 2>&1 &
+            python3 src/visualizer_server.py > ../logs/space.log 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Space Visualizer started (PID: $VISUALIZER_PID)"
