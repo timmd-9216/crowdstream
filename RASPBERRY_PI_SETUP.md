@@ -9,6 +9,12 @@ Este documento explica cómo ejecutar el sistema en Raspberry Pi 4.
 - MicroSD de 32GB o más
 - Python 3.9+
 
+
+Troubleshooting:
+* Revisar alimentación
+* Cable usb-c preferiblemente corto (más largos pueden traer problemas de alimentación)
+
+
 ## ⚠️ Limitaciones Importantes
 
 ### El Detector NO funcionará bien en RPi 4:
