@@ -193,6 +193,9 @@ class DanceMovementDetector:
             frame_count += 1
             current_time = time.time()
 
+            # Get frame dimensions
+            h, w = frame.shape[:2]
+
             # Run YOLO pose detection
             results = self.model.track(frame, persist=True, verbose=False)
 
@@ -212,7 +215,7 @@ class DanceMovementDetector:
                     active_ids.add(person_id)
 
                 # Send keypoint data for skeleton visualization
-                self._send_keypoint_data(track_ids, keypoints)
+                self._send_keypoint_data(track_ids, keypoints, w, h)
 
                 # Cleanup old tracks
                 self.tracker.cleanup_old_tracks(active_ids)
@@ -273,22 +276,31 @@ class DanceMovementDetector:
         if self.config.get('save_to_file', False):
             self._save_stats(stats)
 
-    def _send_keypoint_data(self, track_ids, keypoints):
+    def _send_keypoint_data(self, track_ids, keypoints, frame_width, frame_height):
         """Send raw keypoint data for skeleton visualization"""
-        # Only send to skeleton visualizer (assume it's listening on a different port)
-        # Format: /pose/keypoints person_id x0 y0 conf0 x1 y1 conf1 ... (17 keypoints)
+        base_address = self.config.get('osc_base_address', '/dance')
+
+        # Send keypoints for each person
+        # Format: /dance/pose/person/{id}/keypoints x0 y0 conf0 x1 y1 conf1 ... (17 keypoints)
         for person_id, kps in zip(track_ids, keypoints):
-            # Flatten keypoints array
-            message_data = [int(person_id)]
+            # Normalize keypoints to 0-1 range based on frame dimensions
+            normalized_kps = []
+
             for kp in kps:
-                message_data.extend([float(kp[0]), float(kp[1]), float(kp[2])])
+                # kp is [x, y, confidence]
+                normalized_kps.extend([
+                    float(kp[0] / frame_width),   # Normalize x
+                    float(kp[1] / frame_height),  # Normalize y
+                    float(kp[2])                   # Keep confidence as is
+                ])
 
             # Send to all OSC clients
+            address = f"{base_address}/pose/person/{int(person_id)}/keypoints"
             for client in self.osc_clients:
                 try:
-                    client.send_message("/pose/keypoints", message_data)
+                    client.send_message(address, normalized_kps)
                 except Exception as e:
-                    # Silently continue if skeleton visualizer is not running
+                    # Silently continue if visualizer is not running
                     pass
 
     def _send_osc_messages(self, stats: MovementStats):
