@@ -54,6 +54,7 @@ install_service "dance_dashboard_alt" "FastAPI Dashboard"
 install_service "cosmic_journey" "Cosmic Journey Visualizer"
 install_service "cosmic_skeleton" "Cosmic Skeleton Visualizer"
 install_service "space_visualizer" "Space Visualizer"
+install_service "blur_skeleton_visualizer" "Blur Skeleton Visualizer"
 install_service "dance_movement_detector" "Movement Detector"
 
 # Summary
@@ -75,6 +76,7 @@ if [ $SUCCESS -eq $TOTAL ]; then
     echo "  • cosmic_journey/venv"
     echo "  • cosmic_skeleton/venv"
     echo "  • space_visualizer/venv"
+    echo "  • blur_skeleton_visualizer/venv"
     echo "  • dance_movement_detector/venv"
     echo ""
     echo "To start all services:"

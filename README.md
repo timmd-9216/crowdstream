@@ -34,6 +34,7 @@ cd dance_dashboard_alt && ./install.sh
 cd cosmic_skeleton && ./install.sh
 cd cosmic_journey && ./install.sh
 cd space_visualizer && ./install.sh
+cd blur_skeleton_visualizer && ./install.sh
 cd dance_movement_detector && ./install.sh
 ```
 
@@ -53,6 +54,7 @@ El detector siempre se ejecuta. Debes elegir un visualizador y opcionalmente el 
 # Otros visualizadores disponibles
 ./start-all-services.sh --visualizer cosmic_journey
 ./start-all-services.sh --visualizer space_visualizer
+./start-all-services.sh --visualizer blur_skeleton
 ```
 
 ### Opciones disponibles
@@ -62,6 +64,7 @@ El detector siempre se ejecuta. Debes elegir un visualizador y opcionalmente el 
   - `cosmic_skeleton`: Visualizador de esqueletos
   - `cosmic_journey`: Visualizador cosmic journey
   - `space_visualizer`: Visualizador espacial
+  - `blur_skeleton`: Video borroso con líneas de esqueleto intensas (puerto 8092)
 
 ### Detener servicios
 
@@ -73,9 +76,15 @@ El detector siempre se ejecuta. Debes elegir un visualizador y opcionalmente el 
 
 ```bash
 tail -f logs/detector.log
-tail -f logs/skeleton.log      # o cosmic.log, space.log
+tail -f logs/skeleton.log      # o cosmic.log, space.log, blur.log
 tail -f logs/dashboard_alt.log  # si usas --dashboard
 ```
+
+### Notas importantes
+
+- El detector no muestra ventana de video cuando se ejecuta con el script (configurado con `show_video: false` para reducir recursos)
+- El visualizador `blur_skeleton` captura video directamente y lo procesa con efecto blur + overlay de esqueleto
+- Los keypoints son enviados vía OSC desde el detector a todos los visualizadores configurados
 
 ## Variables de entorno
 

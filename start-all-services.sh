@@ -14,6 +14,7 @@ show_usage() {
     echo "                           - cosmic_skeleton"
     echo "                           - cosmic_journey"
     echo "                           - space_visualizer"
+    echo "                           - blur_skeleton"
     echo "  -h, --help               Show this help message"
     echo ""
     echo "Examples:"
@@ -63,11 +64,11 @@ if [ -z "$VISUALIZER" ]; then
 fi
 
 case $VISUALIZER in
-    cosmic_skeleton|cosmic_journey|space_visualizer)
+    cosmic_skeleton|cosmic_journey|space_visualizer|blur_skeleton)
         ;;
     *)
         echo "Error: Invalid visualizer '$VISUALIZER'"
-        echo "Must be one of: cosmic_skeleton, cosmic_journey, space_visualizer"
+        echo "Must be one of: cosmic_skeleton, cosmic_journey, space_visualizer, blur_skeleton"
         echo ""
         show_usage
         exit 1
@@ -145,6 +146,17 @@ case $VISUALIZER in
         echo "  Space Visualizer started (PID: $VISUALIZER_PID)"
         VISUALIZER_LOG="space.log"
         ;;
+    blur_skeleton)
+        cd blur_skeleton_visualizer
+        if [ -d "venv" ]; then
+            venv/bin/python3 src/server.py --osc-port 5009 --port 8092 --blur 25 > ../logs/blur.log 2>&1 &
+        else
+            python3 src/server.py --osc-port 5009 --port 8092 --blur 25 > ../logs/blur.log 2>&1 &
+        fi
+        VISUALIZER_PID=$!
+        echo "  Blur Skeleton started (PID: $VISUALIZER_PID) on http://localhost:8092"
+        VISUALIZER_LOG="blur.log"
+        ;;
 esac
 cd ..
 sleep 2
@@ -180,6 +192,9 @@ case $VISUALIZER in
         ;;
     space_visualizer)
         echo "🌌 Space Visualizer:   http://localhost:8090"
+        ;;
+    blur_skeleton)
+        echo "🎨 Blur Skeleton:      http://localhost:8092  (OSC: 5009)"
         ;;
 esac
 
