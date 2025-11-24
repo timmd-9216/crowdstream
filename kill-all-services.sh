@@ -34,16 +34,29 @@ kill_service() {
 kill_service "Dance Movement Detector" "dance_movement_detector.py"
 kill_service "Dashboard Server" "dashboard_server.py"
 kill_service "FastAPI Dashboard" "dance_dashboard_alt/src/server.py"
+kill_service "Cosmic Skeleton" "cosmic_skeleton/src/server.py"
+kill_service "Cosmic Journey" "cosmic_journey/src/cosmic_server.py"
 kill_service "Space Visualizer" "visualizer_server.py"
 kill_service "Service Controller" "service_manager.py"
 
 echo ""
 echo "=== Verifying Ports ==="
 
-# Check if ports are free
+# Check if ports are free and kill processes using them
 for port in 5005 5006 5007 8000 8080 8081 8082 8090 8091; do
-    if lsof -ti:$port > /dev/null 2>&1; then
-        echo "⚠ Port $port still in use"
+    pids=$(lsof -ti:$port 2>/dev/null)
+    if [ ! -z "$pids" ]; then
+        echo "⚠ Port $port still in use (PIDs: $pids)"
+        echo "  Killing processes on port $port..."
+        echo "$pids" | xargs kill 2>/dev/null
+        sleep 0.5
+        # Force kill if still running
+        remaining=$(lsof -ti:$port 2>/dev/null)
+        if [ ! -z "$remaining" ]; then
+            echo "  Force killing processes on port $port..."
+            echo "$remaining" | xargs kill -9 2>/dev/null
+        fi
+        echo "✓ Port $port is now free"
     else
         echo "✓ Port $port is free"
     fi
