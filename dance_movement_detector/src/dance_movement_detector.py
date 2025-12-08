@@ -303,15 +303,9 @@ class DanceMovementDetector:
 
                     # OLD FORMAT: /pose/keypoints person_id x0 y0 c0 x1 y1 c1 ...
                     # Used by cosmic_skeleton, skeleton_visualizer
-                    # Need to denormalize back to pixel coordinates for old format
-                    pixel_kps = [int(person_id)]
-                    for i in range(0, len(normalized_kps), 3):
-                        pixel_kps.extend([
-                            normalized_kps[i] * frame_width,      # x in pixels
-                            normalized_kps[i+1] * frame_height,   # y in pixels
-                            normalized_kps[i+2]                    # confidence
-                        ])
-                    client.send_message("/pose/keypoints", pixel_kps)
+                    # Send NORMALIZED coordinates (0-1 range) for compatibility
+                    old_format_kps = [int(person_id)] + normalized_kps
+                    client.send_message("/pose/keypoints", old_format_kps)
 
                 except Exception as e:
                     # Silently continue if visualizer is not running

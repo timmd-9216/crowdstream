@@ -166,22 +166,21 @@ esac
 cd ..
 sleep 2
 
-# Start Detector (skip for blur_skeleton since it's autonomous)
-if [ "$VISUALIZER" != "blur_skeleton" ]; then
-    echo "Starting Movement Detector..."
-    cd dance_movement_detector
-    if [ -d "venv" ]; then
-        venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/multi_destination.json > ../logs/detector.log 2>&1 &
-    else
-        python3 src/dance_movement_detector.py --config config/multi_destination.json > ../logs/detector.log 2>&1 &
-    fi
-    DETECTOR_PID=$!
-    echo "  Detector started (PID: $DETECTOR_PID)"
-    cd ..
-    sleep 2
+# Start Detector (always start it to feed the dashboard)
+echo "Starting Movement Detector..."
+cd dance_movement_detector
+if [ -d "venv" ]; then
+    venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/multi_destination.json > ../logs/detector.log 2>&1 &
 else
-    echo "Skipping Movement Detector (blur_skeleton is autonomous)"
+    python3 src/dance_movement_detector.py --config config/multi_destination.json > ../logs/detector.log 2>&1 &
 fi
+DETECTOR_PID=$!
+echo "  Detector started (PID: $DETECTOR_PID)"
+if [ "$VISUALIZER" = "blur_skeleton" ]; then
+    echo "  Note: blur_skeleton also runs its own YOLO detection independently"
+fi
+cd ..
+sleep 2
 
 echo ""
 echo "=== Services Started ==="
@@ -207,9 +206,7 @@ case $VISUALIZER in
         ;;
 esac
 
-if [ "$VISUALIZER" != "blur_skeleton" ]; then
-    echo "🤖 Detector:           Sending to all OSC ports"
-fi
+echo "🤖 Detector:           Sending to all OSC ports"
 echo ""
 
 # Show PIDs
@@ -218,9 +215,7 @@ if [ "$START_DASHBOARD" = true ]; then
     echo "  Dashboard:  $DASHBOARD_PID"
 fi
 echo "  Visualizer: $VISUALIZER_PID"
-if [ "$VISUALIZER" != "blur_skeleton" ]; then
-    echo "  Detector:   $DETECTOR_PID"
-fi
+echo "  Detector:   $DETECTOR_PID"
 echo ""
 
 # Show log commands
@@ -229,9 +224,7 @@ if [ "$START_DASHBOARD" = true ]; then
     echo "  tail -f logs/dashboard_alt.log"
 fi
 echo "  tail -f logs/$VISUALIZER_LOG"
-if [ "$VISUALIZER" != "blur_skeleton" ]; then
-    echo "  tail -f logs/detector.log"
-fi
+echo "  tail -f logs/detector.log"
 echo ""
 echo "To stop all services:"
 echo "  ./kill-all-services.sh"
