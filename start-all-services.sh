@@ -11,6 +11,7 @@ show_usage() {
     echo "Options:"
     echo "  --visualizer VISUALIZER  Start a visualizer (required, one of):"
     echo "                           - cosmic_skeleton"
+    echo "                           - skeleton_visualizer"
     echo "                           - cosmic_journey"
     echo "                           - space_visualizer"
     echo "                           - blur_skeleton"
@@ -69,11 +70,11 @@ if [ -z "$VISUALIZER" ]; then
 fi
 
 case $VISUALIZER in
-    cosmic_skeleton|cosmic_journey|space_visualizer|blur_skeleton)
+    cosmic_skeleton|skeleton_visualizer|cosmic_journey|space_visualizer|blur_skeleton)
         ;;
     *)
         echo "Error: Invalid visualizer '$VISUALIZER'"
-        echo "Must be one of: cosmic_skeleton, cosmic_journey, space_visualizer, blur_skeleton"
+        echo "Must be one of: cosmic_skeleton, skeleton_visualizer, cosmic_journey, space_visualizer, blur_skeleton"
         echo ""
         show_usage
         exit 1
@@ -121,13 +122,24 @@ case $VISUALIZER in
     cosmic_skeleton)
         cd cosmic_skeleton
         if [ -d "venv" ]; then
-            venv/bin/python3 src/server.py --osc-port 5007 --port 8091 > ../logs/skeleton.log 2>&1 &
+            venv/bin/python3 src/server.py --osc-port 5007 --port 8091 > ../logs/cosmic_skeleton.log 2>&1 &
         else
-            python3 src/server.py --osc-port 5007 --port 8091 > ../logs/skeleton.log 2>&1 &
+            python3 src/server.py --osc-port 5007 --port 8091 > ../logs/cosmic_skeleton.log 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Cosmic Skeleton started (PID: $VISUALIZER_PID) on http://localhost:8091"
-        VISUALIZER_LOG="skeleton.log"
+        VISUALIZER_LOG="cosmic_skeleton.log"
+        ;;
+    skeleton_visualizer)
+        cd skeleton_visualizer
+        if [ -d "venv" ]; then
+            venv/bin/python3 src/server.py --osc-port 5007 --port 8093 > ../logs/skeleton_visualizer.log 2>&1 &
+        else
+            python3 src/server.py --osc-port 5007 --port 8093 > ../logs/skeleton_visualizer.log 2>&1 &
+        fi
+        VISUALIZER_PID=$!
+        echo "  Skeleton Visualizer started (PID: $VISUALIZER_PID) on http://localhost:8093"
+        VISUALIZER_LOG="skeleton_visualizer.log"
         ;;
     cosmic_journey)
         cd cosmic_journey
@@ -194,6 +206,9 @@ fi
 case $VISUALIZER in
     cosmic_skeleton)
         echo "💀 Cosmic Skeleton:    http://localhost:8091  (OSC: 5007)"
+        ;;
+    skeleton_visualizer)
+        echo "🦴 Skeleton Visualizer: http://localhost:8093  (OSC: 5007)"
         ;;
     cosmic_journey)
         echo "🌌 Cosmic Journey:     http://localhost:8091  (OSC: 5007)"
