@@ -287,20 +287,20 @@ class CosmicSkeletonVisualizer {
         this.clearCanvas();
 
         // Draw each person's cosmic skeleton
-        for (const pose of poses) {
-            this.drawCosmicSkeleton(pose.keypoints);
+        for (let i = 0; i < poses.length; i++) {
+            this.drawCosmicSkeleton(poses[i].keypoints, i, poses.length);
         }
 
         // Update and draw particles
         this.updateParticles();
     }
 
-    drawCosmicSkeleton(keypoints) {
+    drawCosmicSkeleton(keypoints, personIndex = 0, totalPeople = 1) {
         if (!keypoints || keypoints.length === 0) {
             return;
         }
 
-        const normalizedKeypoints = this.normalizeKeypoints(keypoints);
+        const normalizedKeypoints = this.normalizeKeypoints(keypoints, personIndex, totalPeople);
 
         // Draw glowing connections (cosmic energy beams)
         this.ctx.lineWidth = 4;
@@ -417,7 +417,7 @@ class CosmicSkeletonVisualizer {
         });
     }
 
-    normalizeKeypoints(keypoints) {
+    normalizeKeypoints(keypoints, personIndex = 0, totalPeople = 1) {
         let minX = Infinity, maxX = -Infinity;
         let minY = Infinity, maxY = -Infinity;
 
@@ -437,6 +437,7 @@ class CosmicSkeletonVisualizer {
         const width = maxX - minX;
         const height = maxY - minY;
 
+        // If already normalized (0-1 range), just scale to canvas
         if (maxX <= 1.0 && maxY <= 1.0) {
             return keypoints.map(kp => [
                 kp[0] * this.canvas.width,
@@ -445,14 +446,25 @@ class CosmicSkeletonVisualizer {
             ]);
         }
 
-        const padding = 0.1;
+        // Calculate section width for multiple people
+        const sectionWidth = this.canvas.width / totalPeople;
+        const sectionPadding = 0.1;
+
+        // Calculate scale to fit person in their section
+        const availableWidth = sectionWidth * (1 - 2 * sectionPadding);
+        const availableHeight = this.canvas.height * (1 - 2 * sectionPadding);
+
         const scale = Math.min(
-            this.canvas.width * (1 - 2 * padding) / width,
-            this.canvas.height * (1 - 2 * padding) / height
+            availableWidth / width,
+            availableHeight / height
         );
 
-        const offsetX = (this.canvas.width - width * scale) / 2 - minX * scale;
-        const offsetY = (this.canvas.height - height * scale) / 2 - minY * scale;
+        // Center person in their section
+        const sectionCenterX = sectionWidth * (personIndex + 0.5);
+        const sectionCenterY = this.canvas.height / 2;
+
+        const offsetX = sectionCenterX - (minX + width / 2) * scale;
+        const offsetY = sectionCenterY - (minY + height / 2) * scale;
 
         return keypoints.map(kp => [
             kp[0] * scale + offsetX,
