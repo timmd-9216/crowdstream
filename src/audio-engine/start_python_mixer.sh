@@ -33,7 +33,11 @@ trap cleanup SIGINT SIGTERM
 
 # Start audio server in background
 echo "🎛️💾 Starting Python Audio Server..."
-python audio_server.py &
+if [ -d "venv" ]; then
+    venv/bin/python3 audio_server.py &
+else
+    python3 audio_server.py &
+fi
 AUDIO_SERVER_PID=$!
 
 # Wait for audio server to initialize
@@ -59,7 +63,11 @@ echo "💡 Use Ctrl+C to stop both processes"
 echo "================================================="
 echo ""
 
-python stem_mixer_smart.py
+if [ -d "venv" ]; then
+    venv/bin/python3 stem_mixer_smart.py
+else
+    python3 stem_mixer_smart.py
+fi
 
 # If we get here, mixer exited normally
 cleanup
