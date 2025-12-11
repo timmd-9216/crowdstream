@@ -175,6 +175,20 @@ class DanceMovementDetector:
         if not self.cap.isOpened():
             raise RuntimeError(f"Cannot open video source: {self.video_source}")
 
+        # Reduce camera buffer to minimize latency
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        # Set camera resolution (lower = faster)
+        camera_width = self.config.get('camera_width', 640)
+        camera_height = self.config.get('camera_height', 480)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+
+        # Set FPS if specified
+        camera_fps = self.config.get('camera_fps', None)
+        if camera_fps:
+            self.cap.set(cv2.CAP_PROP_FPS, camera_fps)
+
         print(f"Starting dance movement detection...")
         print(f"Video source: {self.video_source}")
         print(f"Message interval: {self.message_interval}s")
@@ -193,6 +207,7 @@ class DanceMovementDetector:
     def _detection_loop(self):
         """Main detection loop"""
         frame_count = 0
+        skip_frames = self.config.get('skip_frames', 0)  # Process every Nth frame
 
         while True:
             ret, frame = self.cap.read()
@@ -201,6 +216,11 @@ class DanceMovementDetector:
                 break
 
             frame_count += 1
+
+            # Skip frames for performance (process every Nth frame)
+            if skip_frames > 0 and frame_count % (skip_frames + 1) != 0:
+                continue
+
             current_time = time.time()
 
             # Get frame dimensions

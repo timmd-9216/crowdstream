@@ -10,6 +10,12 @@
   "max_det": 5,
   "history_frames": 5,
 
+  "_comment_camera": "Camera settings to reduce latency",
+  "camera_width": 640,
+  "camera_height": 480,
+  "camera_fps": 30,
+  "skip_frames": 0,
+
   "osc_destinations": [
     {
       "host": "127.0.0.1",
@@ -38,5 +44,7 @@
   "_imgsz_416": "imgsz=416 -> Good balance (recommended for RPi4)",
   "_imgsz_640": "imgsz=640 -> Better accuracy, slower",
   "_conf_threshold": "Higher = fewer false positives but may miss people",
-  "_max_det": "Reduce to 3-5 if tracking only a few dancers"
+  "_max_det": "Reduce to 3-5 if tracking only a few dancers",
+  "_skip_frames": "skip_frames=1 -> Process every 2nd frame (2x faster, slight latency)",
+  "_camera_resolution": "Lower resolution = less latency + faster processing"
 }
