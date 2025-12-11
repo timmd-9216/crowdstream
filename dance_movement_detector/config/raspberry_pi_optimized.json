@@ -1,0 +1,42 @@
+{
+  "video_source": 0,
+  "message_interval": 1.0,
+
+  "_comment_performance": "Performance optimizations for Raspberry Pi 4",
+  "model": "yolov8n-pose.pt",
+  "imgsz": 416,
+  "conf_threshold": 0.3,
+  "iou_threshold": 0.5,
+  "max_det": 5,
+  "history_frames": 5,
+
+  "osc_destinations": [
+    {
+      "host": "127.0.0.1",
+      "port": 5005,
+      "description": "Dashboard"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 5007,
+      "description": "Cosmic Skeleton"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 5009,
+      "description": "Blur Skeleton"
+    }
+  ],
+
+  "osc_base_address": "/dance",
+  "show_video": true,
+  "save_to_file": false,
+  "output_file": "movement_stats.json",
+
+  "_comment_options": "Performance tips:",
+  "_imgsz_320": "imgsz=320 -> Fastest, lower accuracy",
+  "_imgsz_416": "imgsz=416 -> Good balance (recommended for RPi4)",
+  "_imgsz_640": "imgsz=640 -> Better accuracy, slower",
+  "_conf_threshold": "Higher = fewer false positives but may miss people",
+  "_max_det": "Reduce to 3-5 if tracking only a few dancers"
+}

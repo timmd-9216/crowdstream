@@ -124,7 +124,17 @@ class DanceMovementDetector:
 
     def __init__(self, config: dict):
         self.config = config
-        self.model = YOLO('yolov8n-pose.pt')  # Nano model for speed
+
+        # Model selection (configurable for performance tuning)
+        model_name = config.get('model', 'yolov8n-pose.pt')
+        self.model = YOLO(model_name)
+
+        # Raspberry Pi optimizations
+        self.imgsz = config.get('imgsz', 640)  # Input image size (try 320 or 416 for speed)
+        self.conf_threshold = config.get('conf_threshold', 0.25)  # Confidence threshold
+        self.iou_threshold = config.get('iou_threshold', 0.45)  # IoU threshold for NMS
+        self.max_det = config.get('max_det', 10)  # Maximum detections per image
+
         self.tracker = BodyPartTracker(history_size=config.get('history_frames', 10))
 
         # OSC clients for sending messages (support multiple destinations)
@@ -196,8 +206,18 @@ class DanceMovementDetector:
             # Get frame dimensions
             h, w = frame.shape[:2]
 
-            # Run YOLO pose detection
-            results = self.model.track(frame, persist=True, verbose=False)
+            # Run YOLO pose detection with optimizations
+            results = self.model.track(
+                frame,
+                persist=True,
+                verbose=False,
+                imgsz=self.imgsz,
+                conf=self.conf_threshold,
+                iou=self.iou_threshold,
+                max_det=self.max_det,
+                device='cpu',  # Force CPU on Raspberry Pi
+                half=False  # No FP16 on CPU
+            )
 
             if results[0].keypoints is not None:
                 keypoints = results[0].keypoints.data.cpu().numpy()
