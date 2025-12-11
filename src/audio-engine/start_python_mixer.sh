@@ -5,6 +5,13 @@
 echo "🚀 PYTHON AUDIO MIXER LAUNCHER 🚀"
 echo "========================================"
 
+# Optional audio device selection (pass as first argument)
+AUDIO_DEVICE=""
+if [ ! -z "$1" ]; then
+    AUDIO_DEVICE="--device $1"
+    echo "🎯 Using audio device: $1"
+fi
+
 # Check if files exist
 if [ ! -f "audio_server.py" ]; then
     echo "❌ audio_server.py not found"
@@ -34,9 +41,9 @@ trap cleanup SIGINT SIGTERM
 # Start audio server in background
 echo "🎛️💾 Starting Python Audio Server..."
 if [ -d "venv" ]; then
-    venv/bin/python3 audio_server.py &
+    venv/bin/python3 audio_server.py $AUDIO_DEVICE &
 else
-    python3 audio_server.py &
+    python3 audio_server.py $AUDIO_DEVICE &
 fi
 AUDIO_SERVER_PID=$!
 

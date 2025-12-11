@@ -113,42 +113,62 @@ class PythonAudioServer:
     
     def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None):
         self.osc_port = osc_port
+        self.audio_device = audio_device
         self.sample_rate = 44100
         self.chunk_size = 256
         self.channels = 2
-        
+
         # Audio state
         self.buffers: Dict[int, AudioBuffer] = {}
         self.active_players: Dict[int, StemPlayer] = {}
-        
+
         # Mixing parameters
         self.deck_a_volume = 0.8
         self.deck_b_volume = 0.0
         self.master_volume = 0.8
-        
+
         # PyAudio setup
         self.pa = pyaudio.PyAudio()
         self.stream = None
         self.running = False
-        
+
         # OSC server
         self.osc_server = None
-        
+
         print("🎛️💾 PYTHON AUDIO SERVER INITIALIZING 💾🎛️")
+        self.list_audio_devices()
         self.setup_audio()
         self.setup_osc()
     
+    def list_audio_devices(self):
+        """List available audio output devices"""
+        print("\n📡 Available Audio Devices:")
+        for i in range(self.pa.get_device_count()):
+            info = self.pa.get_device_info_by_index(i)
+            if info['maxOutputChannels'] > 0:
+                host_api = self.pa.get_host_api_info_by_index(info['hostApi'])
+                print(f"  [{i}] {info['name']} ({host_api['name']}) - {info['maxOutputChannels']} channels")
+        print()
+
     def setup_audio(self):
         """Initialize PyAudio stream"""
         try:
-            self.stream = self.pa.open(
-                format=pyaudio.paFloat32,
-                channels=self.channels,
-                rate=self.sample_rate,
-                output=True,
-                frames_per_buffer=self.chunk_size
-            )
-            
+            open_params = {
+                'format': pyaudio.paFloat32,
+                'channels': self.channels,
+                'rate': self.sample_rate,
+                'output': True,
+                'frames_per_buffer': self.chunk_size
+            }
+
+            # Use specific device if provided
+            if self.audio_device is not None:
+                open_params['output_device_index'] = self.audio_device
+                device_info = self.pa.get_device_info_by_index(self.audio_device)
+                print(f"🎯 Using audio device: [{self.audio_device}] {device_info['name']}")
+
+            self.stream = self.pa.open(**open_params)
+
             print(f"🔊 Audio stream opened: {self.sample_rate}Hz, {self.chunk_size} samples")
             self.running = True
             
@@ -391,10 +411,25 @@ class PythonAudioServer:
 def main():
     parser = argparse.ArgumentParser(description='Python Audio Server - SuperCollider replacement')
     parser.add_argument('--port', type=int, default=57120, help='OSC port (default: 57120)')
-    parser.add_argument('--device', type=int, help='Audio device ID')
-    
+    parser.add_argument('--device', type=int, help='Audio device ID (use --list-devices to see options)')
+    parser.add_argument('--list-devices', action='store_true', help='List available audio devices and exit')
+
     args = parser.parse_args()
-    
+
+    # List devices mode
+    if args.list_devices:
+        pa = pyaudio.PyAudio()
+        print("\n📡 Available Audio Output Devices:")
+        for i in range(pa.get_device_count()):
+            info = pa.get_device_info_by_index(i)
+            if info['maxOutputChannels'] > 0:
+                host_api = pa.get_host_api_info_by_index(info['hostApi'])
+                is_default = " (DEFAULT)" if i == pa.get_default_output_device_info()['index'] else ""
+                print(f"  [{i}] {info['name']} ({host_api['name']}) - {info['maxOutputChannels']} channels{is_default}")
+        pa.terminate()
+        print("\nUse: python audio_server.py --device <ID>\n")
+        return
+
     # Create and start server
     server = PythonAudioServer(osc_port=args.port, audio_device=args.device)
     server_thread = server.start()
