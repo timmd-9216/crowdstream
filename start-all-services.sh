@@ -170,9 +170,9 @@ sleep 2
 echo "Starting Movement Detector..."
 cd dance_movement_detector
 if [ -d "venv" ]; then
-    venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/multi_destination.json > ../logs/detector.log 2>&1 &
+    DISPLAY=:0 venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/multi_destination.json > ../logs/detector.log 2>&1 &
 else
-    python3 src/dance_movement_detector.py --config config/multi_destination.json > ../logs/detector.log 2>&1 &
+    DISPLAY=:0 python3 src/dance_movement_detector.py --config config/multi_destination.json > ../logs/detector.log 2>&1 &
 fi
 DETECTOR_PID=$!
 echo "  Detector started (PID: $DETECTOR_PID)"
