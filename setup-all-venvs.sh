@@ -53,8 +53,10 @@ install_service() {
 install_service "dance_dashboard_alt" "FastAPI Dashboard"
 install_service "cosmic_journey" "Cosmic Journey Visualizer"
 install_service "cosmic_skeleton" "Cosmic Skeleton Visualizer"
+install_service "cosmic_skeleton_standalone" "Cosmic Skeleton Standalone"
 install_service "space_visualizer" "Space Visualizer"
 install_service "blur_skeleton_visualizer" "Blur Skeleton Visualizer"
+install_service "skeleton_visualizer" "Skeleton Visualizer"
 install_service "dance_movement_detector" "Movement Detector"
 
 # Summary
@@ -75,12 +77,14 @@ if [ $SUCCESS -eq $TOTAL ]; then
     echo "  • dance_dashboard_alt/venv"
     echo "  • cosmic_journey/venv"
     echo "  • cosmic_skeleton/venv"
+    echo "  • cosmic_skeleton_standalone/venv  ⭐ (no detector needed)"
     echo "  • space_visualizer/venv"
     echo "  • blur_skeleton_visualizer/venv"
+    echo "  • skeleton_visualizer/venv"
     echo "  • dance_movement_detector/venv"
     echo ""
-    echo "To start all services:"
-    echo "  ./start-all-services.sh"
+    echo "To start services:"
+    echo "  ./start-all-services.sh --visualizer cosmic_skeleton_standalone"
     echo ""
     echo "Note: For Raspberry Pi, use setup-venvs-rpi.sh instead"
     exit 0

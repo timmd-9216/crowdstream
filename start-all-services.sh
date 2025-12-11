@@ -11,10 +11,11 @@ show_usage() {
     echo "Options:"
     echo "  --visualizer VISUALIZER  Start a visualizer (required, one of):"
     echo "                           - cosmic_skeleton"
+    echo "                           - cosmic_skeleton_standalone (⭐ no detector needed)"
     echo "                           - skeleton_visualizer"
     echo "                           - cosmic_journey"
     echo "                           - space_visualizer"
-    echo "                           - blur_skeleton"
+    echo "                           - blur_skeleton (standalone)"
     echo "  --no-dashboard           Skip starting the dashboard (dashboard runs by default)"
     echo "  -h, --help               Show this help message"
     echo ""
@@ -70,11 +71,11 @@ if [ -z "$VISUALIZER" ]; then
 fi
 
 case $VISUALIZER in
-    cosmic_skeleton|skeleton_visualizer|cosmic_journey|space_visualizer|blur_skeleton)
+    cosmic_skeleton|cosmic_skeleton_standalone|skeleton_visualizer|cosmic_journey|space_visualizer|blur_skeleton)
         ;;
     *)
         echo "Error: Invalid visualizer '$VISUALIZER'"
-        echo "Must be one of: cosmic_skeleton, skeleton_visualizer, cosmic_journey, space_visualizer, blur_skeleton"
+        echo "Must be one of: cosmic_skeleton, cosmic_skeleton_standalone, skeleton_visualizer, cosmic_journey, space_visualizer, blur_skeleton"
         echo ""
         show_usage
         exit 1
@@ -83,10 +84,24 @@ esac
 
 echo "=== Starting Dance Movement Services ==="
 echo ""
+# Check if visualizer is standalone (has built-in detection)
+STANDALONE_VISUALIZERS="cosmic_skeleton_standalone blur_skeleton"
+IS_STANDALONE=false
+for standalone in $STANDALONE_VISUALIZERS; do
+    if [ "$VISUALIZER" = "$standalone" ]; then
+        IS_STANDALONE=true
+        break
+    fi
+done
+
 echo "Configuration:"
 echo "  Dashboard:   $([ "$START_DASHBOARD" = true ] && echo "✅ Enabled" || echo "❌ Disabled")"
 echo "  Visualizer:  $VISUALIZER"
-echo "  Detector:    ✅ Always enabled"
+if [ "$IS_STANDALONE" = true ]; then
+    echo "  Detector:    ⚡ Built-in (standalone mode)"
+else
+    echo "  Detector:    ✅ External detector enabled"
+fi
 echo ""
 
 # Change to script directory
@@ -129,6 +144,17 @@ case $VISUALIZER in
         VISUALIZER_PID=$!
         echo "  Cosmic Skeleton started (PID: $VISUALIZER_PID) on http://localhost:8091"
         VISUALIZER_LOG="cosmic_skeleton.log"
+        ;;
+    cosmic_skeleton_standalone)
+        cd cosmic_skeleton_standalone
+        if [ -d "venv" ]; then
+            DISPLAY=:0 venv/bin/python3 src/server.py --port 8094 --source 0 --imgsz 416 > ../logs/cosmic_standalone.log 2>&1 &
+        else
+            DISPLAY=:0 python3 src/server.py --port 8094 --source 0 --imgsz 416 > ../logs/cosmic_standalone.log 2>&1 &
+        fi
+        VISUALIZER_PID=$!
+        echo "  Cosmic Skeleton Standalone started (PID: $VISUALIZER_PID) on http://localhost:8094"
+        VISUALIZER_LOG="cosmic_standalone.log"
         ;;
     skeleton_visualizer)
         cd skeleton_visualizer
@@ -178,21 +204,23 @@ esac
 cd ..
 sleep 2
 
-# Start Detector (always start it to feed the dashboard)
-echo "Starting Movement Detector..."
-cd dance_movement_detector
-if [ -d "venv" ]; then
-    DISPLAY=:0 venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/raspberry_pi_optimized.json > ../logs/detector.log 2>&1 &
+# Start Detector (only if not standalone)
+if [ "$IS_STANDALONE" = false ]; then
+    echo "Starting Movement Detector..."
+    cd dance_movement_detector
+    if [ -d "venv" ]; then
+        DISPLAY=:0 venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/raspberry_pi_optimized.json > ../logs/detector.log 2>&1 &
+    else
+        DISPLAY=:0 python3 src/dance_movement_detector.py --config config/raspberry_pi_optimized.json > ../logs/detector.log 2>&1 &
+    fi
+    DETECTOR_PID=$!
+    echo "  Detector started (PID: $DETECTOR_PID)"
+    cd ..
+    sleep 2
 else
-    DISPLAY=:0 python3 src/dance_movement_detector.py --config config/raspberry_pi_optimized.json > ../logs/detector.log 2>&1 &
+    echo "⏭️  Skipping external detector (visualizer has built-in YOLO)"
+    DETECTOR_PID=""
 fi
-DETECTOR_PID=$!
-echo "  Detector started (PID: $DETECTOR_PID)"
-if [ "$VISUALIZER" = "blur_skeleton" ]; then
-    echo "  Note: blur_skeleton also runs its own YOLO detection independently"
-fi
-cd ..
-sleep 2
 
 echo ""
 echo "=== Services Started ==="
@@ -207,6 +235,9 @@ case $VISUALIZER in
     cosmic_skeleton)
         echo "💀 Cosmic Skeleton:    http://localhost:8091  (OSC: 5007)"
         ;;
+    cosmic_skeleton_standalone)
+        echo "⭐ Cosmic Skeleton Standalone: http://localhost:8094  (Built-in YOLO)"
+        ;;
     skeleton_visualizer)
         echo "🦴 Skeleton Visualizer: http://localhost:8093  (OSC: 5007)"
         ;;
@@ -217,11 +248,13 @@ case $VISUALIZER in
         echo "🌌 Space Visualizer:   http://localhost:8090"
         ;;
     blur_skeleton)
-        echo "🎨 Blur Skeleton:      http://localhost:8092  (OSC: 5009)"
+        echo "🎨 Blur Skeleton:      http://localhost:8092  (Built-in YOLO)"
         ;;
 esac
 
-echo "🤖 Detector:           Sending to all OSC ports"
+if [ "$IS_STANDALONE" = false ]; then
+    echo "🤖 Detector:           Sending to all OSC ports"
+fi
 echo ""
 
 # Show PIDs
@@ -230,7 +263,9 @@ if [ "$START_DASHBOARD" = true ]; then
     echo "  Dashboard:  $DASHBOARD_PID"
 fi
 echo "  Visualizer: $VISUALIZER_PID"
-echo "  Detector:   $DETECTOR_PID"
+if [ "$IS_STANDALONE" = false ] && [ ! -z "$DETECTOR_PID" ]; then
+    echo "  Detector:   $DETECTOR_PID"
+fi
 echo ""
 
 # Show log commands
