@@ -252,6 +252,12 @@ class CosmicSkeletonVisualizer {
         }
 
         const poses = data.poses || [];
+
+        // Debug logging for multiple people
+        if (poses.length > 1) {
+            console.log(`🎭 Received ${poses.length} people:`, poses.map(p => p.person_id));
+        }
+
         document.getElementById('person-count').textContent = poses.length;
 
         const now = new Date();
@@ -286,8 +292,14 @@ class CosmicSkeletonVisualizer {
     drawCosmicSkeletons(poses) {
         this.clearCanvas();
 
+        // Debug logging for drawing
+        if (poses.length > 1) {
+            console.log(`🎨 Drawing ${poses.length} skeletons`);
+        }
+
         // Draw each person's cosmic skeleton
         for (let i = 0; i < poses.length; i++) {
+            console.log(`  Drawing person ${i}/${poses.length} (ID: ${poses[i].person_id})`);
             this.drawCosmicSkeleton(poses[i].keypoints, i, poses.length);
         }
 
@@ -424,7 +436,12 @@ class CosmicSkeletonVisualizer {
         const visibleKeypoints = keypoints.filter(kp => kp[2] > 0.5);
 
         if (visibleKeypoints.length === 0) {
+            console.warn(`⚠️  Person ${personIndex}: No visible keypoints`);
             return keypoints;
+        }
+
+        if (totalPeople > 1) {
+            console.log(`  🔧 Normalizing person ${personIndex}/${totalPeople}, visible keypoints: ${visibleKeypoints.length}`);
         }
 
         for (const kp of visibleKeypoints) {
