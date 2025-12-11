@@ -30,7 +30,7 @@
   ],
   "osc_base_address": "/dance",
   "history_frames": 10,
-  "show_video": false,
+  "show_video": true,
   "save_to_file": false,
   "output_file": "movement_stats.json"
 }
