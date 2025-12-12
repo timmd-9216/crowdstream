@@ -27,6 +27,38 @@ This tool is designed to answer one practical question:
   - original vs sectioned durations
   - exact output file paths
 
+## Usage
+
+### Example: export sections at a target BPM using Rekordbox BPM
+
+```bash
+python struct_loader.py \
+  --bpm 122.5 --delta 2 --key "Gm,Cm" \
+  --rekordbox-xml /Users/xaviergonzalez/Documents/repos/crowdstream/track_data_rekordbox.xml \
+  --csv-out selected.csv \
+  --parts-dir parts_temp
+```
+
+This command:
+
+- Selects tracks within **±2 BPM of 122.5**
+- Filters by musical key **Gm OR Cm**
+- Uses **Rekordbox `AverageBpm`** (from the XML) instead of BPM stored in the JSONs
+- Exports **sectioned WAV files** cropped from `ini_cue` to `end_cue`
+- Tempo-aligns all exported sections to the **target BPM**
+- Writes a detailed CSV (`selected.csv`) with:
+  - original cues (`ini_cue`, `begin_cue`, `end_cue`)
+  - adjusted cues (`begin_cue_adj`, `end_cue_adj`)
+  - original vs sectioned durations (for debugging)
+
+#### Important notes
+
+- BPM values stored in the track JSON files may be inaccurate.
+- When `--rekordbox-xml` is provided, BPM is overridden **in memory only** using Rekordbox’s `AverageBpm`.
+- The JSON files on disk are **not modified**.
+- The CSV is intended as a debugging and verification tool; if
+  `duration_sectioned ≈ duration_orig / speed`, the tempo alignment worked.
+
 ---
 
 ## Requirements
@@ -38,3 +70,4 @@ Check that Python can see ffmpeg:
 
 ```bash
 python -c "import shutil; print(shutil.which('ffmpeg'))"
+```
