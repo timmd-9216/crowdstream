@@ -455,10 +455,23 @@ class PythonAudioServer:
             print("💡 Same OSC API as SuperCollider server")
             print()
 
-            # Skip test tone for now - start audio loop directly
-            # print("⏳ Waiting for audio stream to stabilize...")
-            # time.sleep(0.5)
-            # self.play_test_tone(duration=1.0, frequency=440.0)
+            # Play test tone BEFORE starting audio loop (like test_audio.py)
+            print("⏳ Waiting for audio stream to stabilize...")
+            time.sleep(0.5)
+
+            print("\n🎵 Playing test tone (440 Hz, 2s)...")
+            # Generate test tone - same as test_audio.py
+            duration = 2.0
+            frequency = 440.0
+            t = np.linspace(0, duration, int(self.sample_rate * duration))
+            samples = np.sin(2 * np.pi * frequency * t) * 0.3  # 30% volume
+            stereo_samples = np.column_stack((samples, samples)).astype(np.float32)
+
+            try:
+                self.stream.write(stereo_samples.tobytes())
+                print("✅ Test tone completed - audio is working!")
+            except Exception as e:
+                print(f"❌ Test tone failed: {e}")
 
             # Start the audio loop
             print("\n🎵 Starting audio processing loop...")
