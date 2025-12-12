@@ -9,7 +9,15 @@ This tool is designed to answer one practical question:
 > *“Give me consistent, tempo-aligned sections I can actually mix.”*
 
 ---
+### Example: export sections at a target BPM using Rekordbox BPM
 
+```bash
+python struct_loader.py \
+  --bpm 122.5 --delta 2 --key "Gm,Cm" \
+  --rekordbox-xml /Users/xaviergonzalez/Documents/repos/crowdstream/track_data_rekordbox.xml \
+  --csv-out selected.csv \
+  --parts-dir parts_temp
+  
 ## What this script does
 
 - Loads **track structure JSONs** (segments, beats, cues)
