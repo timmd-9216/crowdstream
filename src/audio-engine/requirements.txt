@@ -9,7 +9,8 @@ scipy>=1.10.0
 pydub>=0.25.0
 
 # Real-time audio and OSC control
-pyaudio>=0.2.14
+# NOTE: Use system PyAudio on Raspberry Pi (apt install python3-pyaudio)
+# pyaudio>=0.2.14  # Commented: use system version 0.2.13 on RPi
 python-osc>=1.9.0
 
 # Scientific computing and data processing
