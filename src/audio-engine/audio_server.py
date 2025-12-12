@@ -236,12 +236,21 @@ class PythonAudioServer:
                             player.playing = False
                 
                 # Apply deck volumes and mix
-                final_mix = (deck_a_mix * self.deck_a_volume + 
+                final_mix = (deck_a_mix * self.deck_a_volume +
                             deck_b_mix * self.deck_b_volume) * self.master_volume
-                
+
                 # Soft limiting to prevent clipping
                 final_mix = np.tanh(final_mix * 0.9) * 0.9
-                
+
+                # Debug: log if we have actual audio
+                max_amplitude = np.max(np.abs(final_mix))
+                if max_amplitude > 0.01 and hasattr(self, '_last_log_time'):
+                    if time.time() - self._last_log_time > 2.0:  # Log every 2 seconds
+                        print(f"🔊 Audio level: {max_amplitude:.3f} | Players: {len(self.active_players)} | Playing: {sum(1 for p in self.active_players.values() if p.playing)}")
+                        self._last_log_time = time.time()
+                elif not hasattr(self, '_last_log_time'):
+                    self._last_log_time = time.time()
+
                 # Write to audio stream (blocking call)
                 if self.stream and self.stream.is_active():
                     try:
