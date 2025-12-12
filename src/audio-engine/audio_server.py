@@ -10,10 +10,10 @@ import soundfile as sf
 import pyaudio
 import threading
 import time
+from pathlib import Path
 from pythonosc import dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
 from typing import Dict, Optional, Tuple
-from pathlib import Path
 import argparse
 
 class AudioBuffer:
@@ -472,6 +472,38 @@ class PythonAudioServer:
                 print("✅ Test tone completed - audio is working!")
             except Exception as e:
                 print(f"❌ Test tone failed: {e}")
+
+            # TEST: Play a real stem file directly (like test tone)
+            print("\n🎵 Testing stem playback (bass from first song)...")
+            try:
+                import soundfile as sf
+                # Find first available bass stem
+                stems_dir = Path("stems")
+                if stems_dir.exists():
+                    for song_dir in sorted(stems_dir.iterdir()):
+                        if song_dir.is_dir():
+                            bass_file = song_dir / "bass.wav"
+                            if bass_file.exists():
+                                print(f"📂 Loading: {bass_file}")
+                                audio_data, sr = sf.read(str(bass_file), dtype=np.float32)
+
+                                # Ensure stereo
+                                if audio_data.ndim == 1:
+                                    audio_data = np.column_stack((audio_data, audio_data))
+
+                                # Play first 5 seconds only
+                                samples_to_play = min(len(audio_data), sr * 5)
+                                audio_chunk = audio_data[:samples_to_play]
+
+                                print(f"▶️  Playing {samples_to_play/sr:.1f}s of bass at 50% volume...")
+                                audio_chunk = audio_chunk * 0.5  # 50% volume
+                                self.stream.write(audio_chunk.astype(np.float32).tobytes())
+                                print("✅ Stem playback test completed!")
+                                break
+            except Exception as e:
+                print(f"⚠️  Stem test failed: {e}")
+                import traceback
+                traceback.print_exc()
 
             # Start the audio loop
             print("\n🎵 Starting audio processing loop...")
