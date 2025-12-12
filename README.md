@@ -1,30 +1,40 @@
-# crowdstream_local
+# Track Section Exporter (`struct_loader.py`)
 
-Python audio server capable of loading stems into memory and playing them in sync
-via OSC control. The server exposes a SuperCollider-compatible OSC API and
-supports crossfading between two virtual decks, tempo control, and real-time
-mixing using PyAudio.
+A DJ-focused utility to extract **mix-ready audio sections** from tracks using
+precomputed structure JSONs, with **accurate BPM handling via Rekordbox** and
+full **debug visibility** through a rich CSV output.
+
+This tool is designed to answer one practical question:
+
+> *“Give me consistent, tempo-aligned sections I can actually mix.”*
+
+---
+
+## What this script does
+
+- Loads **track structure JSONs** (segments, beats, cues)
+- Optionally **overrides BPM using Rekordbox XML** (`AverageBpm`)
+- Filters tracks by **BPM range** and **musical key**
+- Computes:
+  - intro cue (`ini_cue`)
+  - section boundaries counted *after* the intro
+- Exports **sectioned WAV files**
+  - cropped from `ini_cue → end_cue`
+  - **tempo-adjusted to a target BPM**
+- Writes a **debug-friendly CSV** with:
+  - raw cues
+  - adjusted cues
+  - original vs sectioned durations
+  - exact output file paths
+
+---
 
 ## Requirements
 
-- Python 3.10+
-- NumPy
-- SoundFile
-- PyAudio
-- python-osc
+- Python **3.10+**
+- `ffmpeg` available **to Python**
 
-Install dependencies with:
+Check that Python can see ffmpeg:
 
 ```bash
-pip install numpy soundfile pyaudio python-osc
-```
-
-## Usage
-
-```bash
-python audio_server.py --port 57120 --device <audio_device_id> --bpm 120
-```
-
-Once running, control the server using OSC messages such as `/load_buffer`,
-`/play_stem`, `/stop_stem`, `/stem_volume`, `/crossfade_levels`, `/set_tempo`,
-and `/mixer_cleanup`.
+python -c "import shutil; print(shutil.which('ffmpeg'))"
