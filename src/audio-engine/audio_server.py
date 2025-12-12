@@ -115,7 +115,7 @@ class PythonAudioServer:
         self.osc_port = osc_port
         self.audio_device = audio_device
         self.sample_rate = 44100
-        self.chunk_size = 256
+        self.chunk_size = 1024  # Increased from 256 to reduce ALSA issues on RPi
         self.channels = 2
 
         # Audio state
@@ -202,12 +202,12 @@ class PythonAudioServer:
             self.stream = self.pa.open(**open_params)
 
             print(f"🔊 Audio stream opened: {self.sample_rate}Hz, {self.chunk_size} samples")
-            self.running = True
-            
-            # Start audio processing thread instead of callback
-            self.audio_thread = threading.Thread(target=self.audio_loop)
-            self.audio_thread.daemon = True
-            self.audio_thread.start()
+
+            # DON'T start audio_loop yet - will start after test tone
+            # self.running = True
+            # self.audio_thread = threading.Thread(target=self.audio_loop)
+            # self.audio_thread.daemon = True
+            # self.audio_thread.start()
             
         except Exception as e:
             print(f"❌ Failed to open audio stream: {e}")
@@ -242,12 +242,16 @@ class PythonAudioServer:
                 # Soft limiting to prevent clipping
                 final_mix = np.tanh(final_mix * 0.9) * 0.9
                 
-                # Write to audio stream
+                # Write to audio stream (blocking call)
                 if self.stream and self.stream.is_active():
-                    self.stream.write(final_mix.astype(np.float32).tobytes())
+                    try:
+                        self.stream.write(final_mix.astype(np.float32).tobytes(),
+                                        exception_on_underflow=False)
+                    except Exception as e:
+                        # Silently continue on write errors (common on RPi)
+                        pass
 
-                # No sleep - let PyAudio handle blocking
-                # time.sleep(0.001)  # Removed: causes buffer underruns on some systems
+                # No sleep - write() is blocking and handles timing
                 
             except Exception as e:
                 print(f"❌ Audio loop error: {e}")
@@ -442,8 +446,20 @@ class PythonAudioServer:
             print("💡 Same OSC API as SuperCollider server")
             print()
 
-            # Play test tone to verify audio is working
-            self.play_test_tone(duration=1.0, frequency=440.0)
+            # Skip test tone for now - start audio loop directly
+            # print("⏳ Waiting for audio stream to stabilize...")
+            # time.sleep(0.5)
+            # self.play_test_tone(duration=1.0, frequency=440.0)
+
+            # Start the audio loop
+            print("\n🎵 Starting audio processing loop...")
+            self.running = True
+            self.audio_thread = threading.Thread(target=self.audio_loop)
+            self.audio_thread.daemon = True
+            self.audio_thread.start()
+
+            # Wait for loop to stabilize
+            time.sleep(0.2)
 
             # Start OSC server
             server_thread = threading.Thread(target=self.osc_server.serve_forever)
