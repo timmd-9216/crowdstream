@@ -10,10 +10,10 @@ import soundfile as sf
 import pyaudio
 import threading
 import time
-from pathlib import Path
 from pythonosc import dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
 from typing import Dict, Optional, Tuple
+from pathlib import Path
 import argparse
 
 class AudioBuffer:
@@ -113,101 +113,49 @@ class PythonAudioServer:
     
     def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None):
         self.osc_port = osc_port
-        self.audio_device = audio_device
         self.sample_rate = 44100
-        self.chunk_size = 1024  # Increased from 256 to reduce ALSA issues on RPi
+        self.chunk_size = 256
         self.channels = 2
-
+        
         # Audio state
         self.buffers: Dict[int, AudioBuffer] = {}
         self.active_players: Dict[int, StemPlayer] = {}
-
+        
         # Mixing parameters
-        self.deck_a_volume = 0.8
-        self.deck_b_volume = 0.0
+        self.deck_a_volume = 1.0
+        self.deck_b_volume = 1.0
         self.master_volume = 0.8
-
+        
         # PyAudio setup
         self.pa = pyaudio.PyAudio()
         self.stream = None
         self.running = False
-
+        
         # OSC server
         self.osc_server = None
-
+        
         print("🎛️💾 PYTHON AUDIO SERVER INITIALIZING 💾🎛️")
-        self.list_audio_devices()
         self.setup_audio()
         self.setup_osc()
     
-    def list_audio_devices(self):
-        """List available audio output devices"""
-        print("\n📡 Available Audio Devices:")
-        for i in range(self.pa.get_device_count()):
-            info = self.pa.get_device_info_by_index(i)
-            if info['maxOutputChannels'] > 0:
-                host_api = self.pa.get_host_api_info_by_index(info['hostApi'])
-                print(f"  [{i}] {info['name']} ({host_api['name']}) - {info['maxOutputChannels']} channels")
-        print()
-
     def setup_audio(self):
         """Initialize PyAudio stream"""
         try:
-            # Find best device: prefer 'pulse' or 'default' by name (better for Raspberry Pi)
-            selected_device = None
-            default_device = None
-            if self.audio_device is None:
-                print("🔍 Searching for best audio device...")
-                for i in range(self.pa.get_device_count()):
-                    try:
-                        info = self.pa.get_device_info_by_index(i)
-                        device_name = info['name'].lower()
-                        # Prefer 'pulse' first
-                        if 'pulse' in device_name and info['maxOutputChannels'] > 0:
-                            selected_device = i
-                            print(f"🔍 Found pulse device: [{i}] {info['name']}")
-                            break
-                        # Store 'default' as fallback
-                        elif device_name == 'default' and info['maxOutputChannels'] > 0:
-                            default_device = i
-                            print(f"🔍 Found default device: [{i}] {info['name']}")
-                    except Exception as e:
-                        print(f"⚠️  Error checking device {i}: {e}")
-
-                # Use default if pulse not found
-                if selected_device is None and default_device is not None:
-                    selected_device = default_device
-                    print(f"🔍 Using default device as fallback")
-
-            open_params = {
-                'format': pyaudio.paFloat32,
-                'channels': self.channels,
-                'rate': self.sample_rate,
-                'output': True,
-                'frames_per_buffer': self.chunk_size
-            }
-
-            # Use specific device if provided, otherwise use selected device
-            if self.audio_device is not None:
-                open_params['output_device_index'] = self.audio_device
-                device_info = self.pa.get_device_info_by_index(self.audio_device)
-                print(f"🎯 Using specified device: [{self.audio_device}] {device_info['name']}")
-            elif selected_device is not None:
-                open_params['output_device_index'] = selected_device
-                device_info = self.pa.get_device_info_by_index(selected_device)
-                print(f"🎯 Using auto-selected device: [{selected_device}] {device_info['name']}")
-            else:
-                print(f"🎯 Using system default device")
-
-            self.stream = self.pa.open(**open_params)
-
+            self.stream = self.pa.open(
+                format=pyaudio.paFloat32,
+                channels=self.channels,
+                rate=self.sample_rate,
+                output=True,
+                frames_per_buffer=self.chunk_size
+            )
+            
             print(f"🔊 Audio stream opened: {self.sample_rate}Hz, {self.chunk_size} samples")
-
-            # DON'T start audio_loop yet - will start after test tone
-            # self.running = True
-            # self.audio_thread = threading.Thread(target=self.audio_loop)
-            # self.audio_thread.daemon = True
-            # self.audio_thread.start()
+            self.running = True
+            
+            # Start audio processing thread instead of callback
+            self.audio_thread = threading.Thread(target=self.audio_loop)
+            self.audio_thread.daemon = True
+            self.audio_thread.start()
             
         except Exception as e:
             print(f"❌ Failed to open audio stream: {e}")
@@ -236,31 +184,18 @@ class PythonAudioServer:
                             player.playing = False
                 
                 # Apply deck volumes and mix
-                final_mix = (deck_a_mix * self.deck_a_volume +
+                final_mix = (deck_a_mix * self.deck_a_volume + 
                             deck_b_mix * self.deck_b_volume) * self.master_volume
-
+                
                 # Soft limiting to prevent clipping
                 final_mix = np.tanh(final_mix * 0.9) * 0.9
-
-                # Debug: log if we have actual audio
-                max_amplitude = np.max(np.abs(final_mix))
-                if max_amplitude > 0.01 and hasattr(self, '_last_log_time'):
-                    if time.time() - self._last_log_time > 2.0:  # Log every 2 seconds
-                        print(f"🔊 Audio level: {max_amplitude:.3f} | Players: {len(self.active_players)} | Playing: {sum(1 for p in self.active_players.values() if p.playing)}")
-                        self._last_log_time = time.time()
-                elif not hasattr(self, '_last_log_time'):
-                    self._last_log_time = time.time()
-
-                # Write to audio stream (blocking call)
+                
+                # Write to audio stream
                 if self.stream and self.stream.is_active():
-                    try:
-                        self.stream.write(final_mix.astype(np.float32).tobytes(),
-                                        exception_on_underflow=False)
-                    except Exception as e:
-                        # Silently continue on write errors (common on RPi)
-                        pass
-
-                # No sleep - write() is blocking and handles timing
+                    self.stream.write(final_mix.astype(np.float32).tobytes())
+                
+                # Small sleep to prevent excessive CPU usage
+                time.sleep(0.001)
                 
             except Exception as e:
                 print(f"❌ Audio loop error: {e}")
@@ -294,14 +229,24 @@ class PythonAudioServer:
         # Cleanup
         disp.map("/mixer_cleanup", self.osc_mixer_cleanup)
         
-        # Start OSC server
-        self.osc_server = ThreadingOSCUDPServer(
-            ("localhost", self.osc_port), disp)
+        # Start OSC server - try IPv6 first, then IPv4
+        self.osc_server = None
+        for bind_addr in ["::", "0.0.0.0"]:  # IPv6 first, then IPv4
+            try:
+                print(f"🔌 Trying OSC server on {bind_addr}:{self.osc_port}")
+                self.osc_server = ThreadingOSCUDPServer(
+                    (bind_addr, self.osc_port), disp)
+                print(f"✅ OSC server created on {bind_addr}:{self.osc_port}")
+                break
+            except Exception as e:
+                print(f"❌ Failed to bind to {bind_addr}: {e}")
         
-        print(f"🔌 OSC server listening on port {self.osc_port}")
+        if not self.osc_server:
+            print("❌ Could not create OSC server on any interface")
     
     def osc_load_buffer(self, address, *args):
         """Load audio buffer - /load_buffer [buffer_id, file_path, stem_name]"""
+        print(f"📡 OSC RECEIVED: {address} {args}")
         try:
             buffer_id = int(args[0])
             file_path = str(args[1])
@@ -416,115 +361,28 @@ class PythonAudioServer:
         except Exception as e:
             print(f"❌ Error cleaning up: {e}")
     
-    def play_test_tone(self, duration=1.0, frequency=440.0):
-        """Play a test tone to verify audio output"""
-        print(f"\n🎵 Playing test tone ({frequency} Hz, {duration}s)...")
-        print(f"📊 Stream info:")
-        print(f"   - Active: {self.stream.is_active()}")
-        print(f"   - Stopped: {self.stream.is_stopped()}")
-        print(f"   - Sample rate: {self.sample_rate} Hz")
-        print(f"   - Channels: {self.channels}")
-
-        # Generate sine wave
-        t = np.linspace(0, duration, int(self.sample_rate * duration))
-        samples = np.sin(2 * np.pi * frequency * t) * 0.3  # 30% volume
-
-        # Convert to stereo
-        stereo_samples = np.column_stack((samples, samples)).astype(np.float32)
-
-        print(f"📊 Audio data: {stereo_samples.shape}, {stereo_samples.dtype}")
-        print(f"📊 Bytes to write: {len(stereo_samples.tobytes())}")
-
-        # Write directly to stream (blocking)
-        try:
-            bytes_written = self.stream.write(stereo_samples.tobytes())
-            print(f"✅ Test tone completed (wrote {len(stereo_samples.tobytes())} bytes)")
-        except Exception as e:
-            print(f"❌ Test tone failed: {e}")
-            import traceback
-            traceback.print_exc()
-
     def start(self):
         """Start the audio server"""
         if self.stream and self.osc_server:
             self.stream.start_stream()
-
+            
+            # Start OSC server FIRST
+            print(f"🔌 Starting OSC server thread...")
+            server_thread = threading.Thread(target=self.osc_server.serve_forever)
+            server_thread.daemon = True
+            server_thread.start()
+            
+            # Give OSC server time to bind to port
+            print(f"⏳ Waiting for OSC server to bind...")
+            time.sleep(0.5)
+            print(f"✅ OSC server should be ready")
+            
             print("🎛️💾 PYTHON AUDIO SERVER READY 💾🎛️")
             print(f"🔊 Audio: {self.sample_rate}Hz, {self.chunk_size} samples")
             print(f"🔌 OSC: localhost:{self.osc_port}")
             print("💡 Same OSC API as SuperCollider server")
             print()
-
-            # Play test tone BEFORE starting audio loop (like test_audio.py)
-            print("⏳ Waiting for audio stream to stabilize...")
-            time.sleep(0.5)
-
-            print("\n🎵 Playing test tone (440 Hz, 2s)...")
-            # Generate test tone - same as test_audio.py
-            duration = 2.0
-            frequency = 440.0
-            t = np.linspace(0, duration, int(self.sample_rate * duration))
-            samples = np.sin(2 * np.pi * frequency * t) * 0.3  # 30% volume
-            stereo_samples = np.column_stack((samples, samples)).astype(np.float32)
-
-            try:
-                self.stream.write(stereo_samples.tobytes())
-                print("✅ Test tone completed - audio is working!")
-            except Exception as e:
-                print(f"❌ Test tone failed: {e}")
-
-            # TEST: Play a real stem file directly (like test tone)
-            print("\n🎵 Testing stem playback (bass from first song)...")
-            try:
-                import soundfile as sf
-                # Find first available bass stem
-                stems_dir = Path("stems")
-                if stems_dir.exists():
-                    for song_dir in sorted(stems_dir.iterdir()):
-                        if song_dir.is_dir():
-                            bass_file = song_dir / "bass.wav"
-                            if bass_file.exists():
-                                print(f"📂 Loading: {bass_file}")
-                                audio_data, sr = sf.read(str(bass_file), dtype=np.float32)
-
-                                # Ensure stereo
-                                if audio_data.ndim == 1:
-                                    audio_data = np.column_stack((audio_data, audio_data))
-
-                                # Play first 5 seconds only
-                                samples_to_play = min(len(audio_data), sr * 5)
-                                audio_chunk = audio_data[:samples_to_play]
-
-                                print(f"▶️  Playing {samples_to_play/sr:.1f}s of bass at 50% volume...")
-                                audio_chunk = audio_chunk * 0.5  # 50% volume
-
-                                # Write audio - this is BLOCKING so it should play completely
-                                self.stream.write(audio_chunk.astype(np.float32).tobytes())
-
-                                print("✅ Stem playback test completed!")
-                                print("⏳ Waiting 1 second before starting audio loop...")
-                                time.sleep(1.0)  # Give time to hear it completed
-                                break
-            except Exception as e:
-                print(f"⚠️  Stem test failed: {e}")
-                import traceback
-                traceback.print_exc()
-
-            # Start the audio loop
-            print("\n🎵 Starting audio processing loop...")
-            self.running = True
-            self.audio_thread = threading.Thread(target=self.audio_loop)
-            self.audio_thread.daemon = True
-            self.audio_thread.start()
-
-            # Wait for loop to stabilize
-            time.sleep(0.2)
-
-            # Start OSC server
-            server_thread = threading.Thread(target=self.osc_server.serve_forever)
-            server_thread.daemon = True
-            server_thread.start()
-
+            
             return server_thread
         else:
             print("❌ Failed to initialize audio server")
@@ -549,25 +407,10 @@ class PythonAudioServer:
 def main():
     parser = argparse.ArgumentParser(description='Python Audio Server - SuperCollider replacement')
     parser.add_argument('--port', type=int, default=57120, help='OSC port (default: 57120)')
-    parser.add_argument('--device', type=int, help='Audio device ID (use --list-devices to see options)')
-    parser.add_argument('--list-devices', action='store_true', help='List available audio devices and exit')
-
+    parser.add_argument('--device', type=int, help='Audio device ID')
+    
     args = parser.parse_args()
-
-    # List devices mode
-    if args.list_devices:
-        pa = pyaudio.PyAudio()
-        print("\n📡 Available Audio Output Devices:")
-        for i in range(pa.get_device_count()):
-            info = pa.get_device_info_by_index(i)
-            if info['maxOutputChannels'] > 0:
-                host_api = pa.get_host_api_info_by_index(info['hostApi'])
-                is_default = " (DEFAULT)" if i == pa.get_default_output_device_info()['index'] else ""
-                print(f"  [{i}] {info['name']} ({host_api['name']}) - {info['maxOutputChannels']} channels{is_default}")
-        pa.terminate()
-        print("\nUse: python audio_server.py --device <ID>\n")
-        return
-
+    
     # Create and start server
     server = PythonAudioServer(osc_port=args.port, audio_device=args.device)
     server_thread = server.start()
