@@ -231,9 +231,9 @@ class PythonAudioServer:
                 # Write to audio stream
                 if self.stream and self.stream.is_active():
                     self.stream.write(final_mix.astype(np.float32).tobytes())
-                
-                # Small sleep to prevent excessive CPU usage
-                time.sleep(0.001)
+
+                # No sleep - let PyAudio handle blocking
+                # time.sleep(0.001)  # Removed: causes buffer underruns on some systems
                 
             except Exception as e:
                 print(f"❌ Audio loop error: {e}")
