@@ -153,19 +153,31 @@ class PythonAudioServer:
     def setup_audio(self):
         """Initialize PyAudio stream"""
         try:
-            # Find PulseAudio device if available (better for Raspberry Pi)
-            pulse_device_index = None
+            # Find best device: prefer 'pulse' or 'default' by name (better for Raspberry Pi)
+            selected_device = None
+            default_device = None
             if self.audio_device is None:
+                print("🔍 Searching for best audio device...")
                 for i in range(self.pa.get_device_count()):
                     try:
                         info = self.pa.get_device_info_by_index(i)
-                        host_api = self.pa.get_host_api_info_by_index(info['hostApi'])
-                        if 'pulse' in host_api['name'].lower() and info['maxOutputChannels'] > 0:
-                            pulse_device_index = i
-                            print(f"🔍 Found PulseAudio device: [{i}] {info['name']}")
+                        device_name = info['name'].lower()
+                        # Prefer 'pulse' first
+                        if 'pulse' in device_name and info['maxOutputChannels'] > 0:
+                            selected_device = i
+                            print(f"🔍 Found pulse device: [{i}] {info['name']}")
                             break
-                    except:
-                        pass
+                        # Store 'default' as fallback
+                        elif device_name == 'default' and info['maxOutputChannels'] > 0:
+                            default_device = i
+                            print(f"🔍 Found default device: [{i}] {info['name']}")
+                    except Exception as e:
+                        print(f"⚠️  Error checking device {i}: {e}")
+
+                # Use default if pulse not found
+                if selected_device is None and default_device is not None:
+                    selected_device = default_device
+                    print(f"🔍 Using default device as fallback")
 
             open_params = {
                 'format': pyaudio.paFloat32,
@@ -175,15 +187,17 @@ class PythonAudioServer:
                 'frames_per_buffer': self.chunk_size
             }
 
-            # Use specific device if provided, otherwise try PulseAudio
+            # Use specific device if provided, otherwise use selected device
             if self.audio_device is not None:
                 open_params['output_device_index'] = self.audio_device
                 device_info = self.pa.get_device_info_by_index(self.audio_device)
-                print(f"🎯 Using audio device: [{self.audio_device}] {device_info['name']}")
-            elif pulse_device_index is not None:
-                open_params['output_device_index'] = pulse_device_index
-                device_info = self.pa.get_device_info_by_index(pulse_device_index)
-                print(f"🎯 Using PulseAudio device: [{pulse_device_index}] {device_info['name']}")
+                print(f"🎯 Using specified device: [{self.audio_device}] {device_info['name']}")
+            elif selected_device is not None:
+                open_params['output_device_index'] = selected_device
+                device_info = self.pa.get_device_info_by_index(selected_device)
+                print(f"🎯 Using auto-selected device: [{selected_device}] {device_info['name']}")
+            else:
+                print(f"🎯 Using system default device")
 
             self.stream = self.pa.open(**open_params)
 
@@ -389,22 +403,53 @@ class PythonAudioServer:
         except Exception as e:
             print(f"❌ Error cleaning up: {e}")
     
+    def play_test_tone(self, duration=1.0, frequency=440.0):
+        """Play a test tone to verify audio output"""
+        print(f"\n🎵 Playing test tone ({frequency} Hz, {duration}s)...")
+        print(f"📊 Stream info:")
+        print(f"   - Active: {self.stream.is_active()}")
+        print(f"   - Stopped: {self.stream.is_stopped()}")
+        print(f"   - Sample rate: {self.sample_rate} Hz")
+        print(f"   - Channels: {self.channels}")
+
+        # Generate sine wave
+        t = np.linspace(0, duration, int(self.sample_rate * duration))
+        samples = np.sin(2 * np.pi * frequency * t) * 0.3  # 30% volume
+
+        # Convert to stereo
+        stereo_samples = np.column_stack((samples, samples)).astype(np.float32)
+
+        print(f"📊 Audio data: {stereo_samples.shape}, {stereo_samples.dtype}")
+        print(f"📊 Bytes to write: {len(stereo_samples.tobytes())}")
+
+        # Write directly to stream (blocking)
+        try:
+            bytes_written = self.stream.write(stereo_samples.tobytes())
+            print(f"✅ Test tone completed (wrote {len(stereo_samples.tobytes())} bytes)")
+        except Exception as e:
+            print(f"❌ Test tone failed: {e}")
+            import traceback
+            traceback.print_exc()
+
     def start(self):
         """Start the audio server"""
         if self.stream and self.osc_server:
             self.stream.start_stream()
-            
+
             print("🎛️💾 PYTHON AUDIO SERVER READY 💾🎛️")
             print(f"🔊 Audio: {self.sample_rate}Hz, {self.chunk_size} samples")
             print(f"🔌 OSC: localhost:{self.osc_port}")
             print("💡 Same OSC API as SuperCollider server")
             print()
-            
+
+            # Play test tone to verify audio is working
+            self.play_test_tone(duration=1.0, frequency=440.0)
+
             # Start OSC server
             server_thread = threading.Thread(target=self.osc_server.serve_forever)
             server_thread.daemon = True
             server_thread.start()
-            
+
             return server_thread
         else:
             print("❌ Failed to initialize audio server")
