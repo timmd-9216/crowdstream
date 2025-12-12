@@ -153,6 +153,20 @@ class PythonAudioServer:
     def setup_audio(self):
         """Initialize PyAudio stream"""
         try:
+            # Find PulseAudio device if available (better for Raspberry Pi)
+            pulse_device_index = None
+            if self.audio_device is None:
+                for i in range(self.pa.get_device_count()):
+                    try:
+                        info = self.pa.get_device_info_by_index(i)
+                        host_api = self.pa.get_host_api_info_by_index(info['hostApi'])
+                        if 'pulse' in host_api['name'].lower() and info['maxOutputChannels'] > 0:
+                            pulse_device_index = i
+                            print(f"🔍 Found PulseAudio device: [{i}] {info['name']}")
+                            break
+                    except:
+                        pass
+
             open_params = {
                 'format': pyaudio.paFloat32,
                 'channels': self.channels,
@@ -161,11 +175,15 @@ class PythonAudioServer:
                 'frames_per_buffer': self.chunk_size
             }
 
-            # Use specific device if provided
+            # Use specific device if provided, otherwise try PulseAudio
             if self.audio_device is not None:
                 open_params['output_device_index'] = self.audio_device
                 device_info = self.pa.get_device_info_by_index(self.audio_device)
                 print(f"🎯 Using audio device: [{self.audio_device}] {device_info['name']}")
+            elif pulse_device_index is not None:
+                open_params['output_device_index'] = pulse_device_index
+                device_info = self.pa.get_device_info_by_index(pulse_device_index)
+                print(f"🎯 Using PulseAudio device: [{pulse_device_index}] {device_info['name']}")
 
             self.stream = self.pa.open(**open_params)
 
