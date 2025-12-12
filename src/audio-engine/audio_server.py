@@ -497,8 +497,13 @@ class PythonAudioServer:
 
                                 print(f"▶️  Playing {samples_to_play/sr:.1f}s of bass at 50% volume...")
                                 audio_chunk = audio_chunk * 0.5  # 50% volume
+
+                                # Write audio - this is BLOCKING so it should play completely
                                 self.stream.write(audio_chunk.astype(np.float32).tobytes())
+
                                 print("✅ Stem playback test completed!")
+                                print("⏳ Waiting 1 second before starting audio loop...")
+                                time.sleep(1.0)  # Give time to hear it completed
                                 break
             except Exception as e:
                 print(f"⚠️  Stem test failed: {e}")

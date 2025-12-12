@@ -47,9 +47,9 @@ else
 fi
 AUDIO_SERVER_PID=$!
 
-# Wait for audio server to initialize
-echo "⏳ Waiting for audio server to initialize..."
-sleep 3
+# Wait for audio server to initialize AND complete test tones
+echo "⏳ Waiting for audio server to initialize and complete tests..."
+sleep 10  # Increased: 0.5s stabilize + 2s tone + 5s bass + 1s wait + buffer
 
 # Check if audio server is still running
 if ! kill -0 $AUDIO_SERVER_PID 2>/dev/null; then
