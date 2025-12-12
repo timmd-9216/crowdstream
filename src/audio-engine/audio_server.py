@@ -231,15 +231,7 @@ class PythonAudioServer:
         
         # Start OSC server - try IPv6 first, then IPv4
         self.osc_server = None
-        for bind_addr in ["::", "0.0.0.0"]:  # IPv6 first, then IPv4
-            try:
-                print(f"🔌 Trying OSC server on {bind_addr}:{self.osc_port}")
-                self.osc_server = ThreadingOSCUDPServer(
-                    (bind_addr, self.osc_port), disp)
-                print(f"✅ OSC server created on {bind_addr}:{self.osc_port}")
-                break
-            except Exception as e:
-                print(f"❌ Failed to bind to {bind_addr}: {e}")
+        self.osc_server = ThreadingOSCUDPServer(("0.0.0.0", self.osc_port), disp)
         
         if not self.osc_server:
             print("❌ Could not create OSC server on any interface")
