@@ -1,0 +1,2 @@
+# No third-party Python packages required for struct_loader.py as of now.
+# Add future dependencies here.

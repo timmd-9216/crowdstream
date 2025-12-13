@@ -20,8 +20,8 @@ import argparse, time
 #TRACK_B = "/Users/xaviergonzalez/Documents/repos/crowdstream/dj/15125355_Young Hearts Run Free_(Original Mix).wav"
 #TRACK_A =  "/Users/xaviergonzalez/Documents/repos/crowdstream/dj/WhoMadeWho, Adriatique, R\u00dcF\u00dcS DU SOL - Miracle - R\u00dcF\u00dcS DU SOL Remix (Original Mix).wav" 
 ##"/Users/xaviergonzalez/Documents/repos/crowdstream/dj/12792193_Keep Control_(ARTBAT Remix).wav"
-TRACK_A = "/Users/xaviergonzalez/Documents/repos/crowdstream/dj/Crystal Waters - 100 Percent Pure Love (Original Mix).wav"
-TRACK_B = "/Users/xaviergonzalez/Documents/repos/crowdstream/dj/Swedish House Mafia, Adriatique, The Weeknd - Moth To A Flame (Adriatique Remix).wav"
+TRACK_A = "../stems/dj/12678406_Mystery_(Tale Of Us & Mathame Remix).wav"
+TRACK_B = "../stems/dj/17563740_On Me_(Extended Mix).wav"
 #TRACK_B = "/Users/xaviergonzalez/Documents/repos/crowdstream/dj/15855321_See You Again_(Original Mix).wav"
 
 BPM = 122.0
