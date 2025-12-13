@@ -105,82 +105,15 @@ class _ThreeBand:
         return out
 
 
-class _ThreeBandOptimized:
-    """Optimized 3-band filter using scipy.signal.lfilter (50-100x faster).
-    Same algorithm as _ThreeBand but vectorized using scipy's C implementation.
-    """
-
-    def __init__(self, sample_rate: int, low_hz: float = 200.0, high_hz: float = 2000.0):
-        if not SCIPY_AVAILABLE:
-            raise ImportError("scipy is required for optimized filters")
-
-        self.fs = float(sample_rate)
-        # one-pole IIR coefficients for lfilter
-        self._a_lp = float(np.exp(-2.0 * np.pi * low_hz / self.fs))
-        self._a_hp = float(np.exp(-2.0 * np.pi * high_hz / self.fs))
-
-        # lfilter format: b, a coefficients
-        # Low-pass: y[n] = (1-a)*x[n] + a*y[n-1]
-        self._b_lp = np.array([1.0 - self._a_lp], dtype=np.float32)
-        self._a_lp_coef = np.array([1.0, -self._a_lp], dtype=np.float32)
-
-        # High-pass: y[n] = a*(y[n-1] + x[n] - x[n-1])
-        self._b_hp = np.array([self._a_hp, -self._a_hp], dtype=np.float32)
-        self._a_hp_coef = np.array([1.0, -self._a_hp], dtype=np.float32)
-
-        # State (zi) for each channel - lfilter requires initial conditions
-        self._zi_lp = np.zeros((1, 2), dtype=np.float32)  # [channel]
-        self._zi_hp = np.zeros((1, 2), dtype=np.float32)
-
-        # user gains
-        self.low_gain = 1.0
-        self.mid_gain = 1.0
-        self.high_gain = 1.0
-
-    def set_gain(self, band: str, value: float) -> None:
-        b = (band or "").strip().lower()
-        v = float(value)
-        if b.startswith("lo"):
-            self.low_gain = v
-        elif b.startswith("mi"):
-            self.mid_gain = v
-        elif b.startswith("hi"):
-            self.high_gain = v
-        else:
-            raise ValueError(f"Unknown band '{band}' (expected 'low'|'mid'|'high')")
-
-    def process(self, x: np.ndarray) -> np.ndarray:
-        """Process audio using vectorized scipy filters (C implementation)."""
-        if x.size == 0:
-            return x
-
-        # Process each channel separately
-        out = np.empty_like(x)
-
-        for ch in range(2):  # Stereo
-            # Low-pass filter
-            low, self._zi_lp[:, ch] = lfilter(
-                self._b_lp, self._a_lp_coef, x[:, ch],
-                zi=self._zi_lp[:, ch]
-            )
-
-            # High-pass filter
-            high, self._zi_hp[:, ch] = lfilter(
-                self._b_hp, self._a_hp_coef, x[:, ch],
-                zi=self._zi_hp[:, ch]
-            )
-
-            # Mid = original - low - high
-            mid = x[:, ch] - low - high
-
-            # Apply gains and sum
-            out[:, ch] = (
-                self.low_gain * low +
-                self.mid_gain * mid +
-                self.high_gain * high
-            )
-
-        return out.astype(np.float32)
+# DISABLED: Optimized filters caused audio to stop working
+# Keeping code for future debugging
+#
+# class _ThreeBandOptimized:
+#     """Optimized 3-band filter using scipy.signal.lfilter (50-100x faster).
+#     Same algorithm as _ThreeBand but vectorized using scipy's C implementation.
+#     DISABLED: Caused silent audio output - needs debugging.
+#     """
+#     pass
 
 
 class TempoClock:
@@ -365,7 +298,7 @@ class PythonAudioServer:
     #   C: 2100–3099
     #   D: 3100–4099
 
-    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024, enable_filters: bool = False, use_optimized_filters: bool = True):
+    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024, enable_filters: bool = False):
         self.osc_port = osc_port
         self.sample_rate = 44100
         self.chunk_size = chunk_size  # Default 1024 for Raspberry Pi stability
@@ -382,20 +315,11 @@ class PythonAudioServer:
         self.master_volume = 0.8
 
         # Per‑deck 3‑band tone filters (low/mid/high)
-        # Use optimized scipy filters if available and requested
-        filter_class = _ThreeBand
-        self.filter_type = "standard (Python loop)"
-        if use_optimized_filters and SCIPY_AVAILABLE:
-            filter_class = _ThreeBandOptimized
-            self.filter_type = "optimized (scipy/C)"
-        elif use_optimized_filters and not SCIPY_AVAILABLE:
-            print("⚠️  scipy not available, falling back to standard filters")
-
-        self._filters: Dict[str, Any] = {
-            'A': filter_class(self.sample_rate),
-            'B': filter_class(self.sample_rate),
-            'C': filter_class(self.sample_rate),
-            'D': filter_class(self.sample_rate),
+        self._filters: Dict[str, _ThreeBand] = {
+            'A': _ThreeBand(self.sample_rate),
+            'B': _ThreeBand(self.sample_rate),
+            'C': _ThreeBand(self.sample_rate),
+            'D': _ThreeBand(self.sample_rate),
         }
 
         self.clock = TempoClock()
@@ -446,7 +370,7 @@ class PythonAudioServer:
 
             self.stream = self.pa.open(**stream_kwargs)
             latency_ms = (self.chunk_size / self.sample_rate) * 1000
-            filters_status = f"ENABLED ({self.filter_type})" if self.enable_filters else "DISABLED (for performance)"
+            filters_status = "ENABLED" if self.enable_filters else "DISABLED (for performance)"
             print(f"🔊 Audio stream opened: {self.sample_rate}Hz, {self.chunk_size} samples ({latency_ms:.1f}ms latency)")
             print(f"🎛️  3-band EQ filters: {filters_status}")
             self.running = True
@@ -1161,7 +1085,7 @@ class PythonAudioServer:
             if not self.enable_filters:
                 print("⚡ Performance mode: EQ filters DISABLED (ignoring /deck_eq commands)")
             else:
-                print(f"🎛️  3-band EQ filters ENABLED ({self.filter_type})")
+                print("🎛️  3-band EQ filters ENABLED")
             print("💡 Same OSC API as SuperCollider server")
 
             server_thread = threading.Thread(
@@ -1228,8 +1152,7 @@ def main() -> None:
         osc_port=args.port,
         audio_device=args.device,
         chunk_size=args.buffer_size,
-        enable_filters=args.enable_filters,
-        use_optimized_filters=True  # Always try to use optimized if available
+        enable_filters=args.enable_filters
     )
     server.clock.bpm = args.bpm
     server.print_clock = bool(args.watch)
