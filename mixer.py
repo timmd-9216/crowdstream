@@ -18,8 +18,8 @@ import argparse, time, json
 from pathlib import Path
 from datetime import datetime
 
-# Search roots for audio material (stems + generated parts)
-SEARCH_ROOTS = [
+# Default search roots for audio material (stems + generated parts)
+DEFAULT_SEARCH_ROOTS = [
     Path(__file__).resolve().parent.parent / "stems",
     Path(__file__).resolve().parent / "parts_temp",
 ]
@@ -53,6 +53,14 @@ def main():
     parser.add_argument("--host", default="127.0.0.1", help="Engine host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=57120, help="Engine OSC port (default: 57120)")
     parser.add_argument("--start-in", type=float, default=0.5, help="Seconds after reset to start both decks together (default: 0.5)")
+    parser.add_argument("--track-a", type=str, help="Override path for Track A (optional).")
+    parser.add_argument("--track-b", type=str, help="Override path for Track B (optional).")
+    parser.add_argument(
+        "--search-root",
+        action="append",
+        type=Path,
+        help="Add/override search roots for WAV discovery (can be repeated). Defaults to repo stems and parts_temp.",
+    )
     parser.add_argument("--preflight-only", action="store_true", help="Scan and resolve tracks, then exit without sending OSC.")
     parser.add_argument(
         "--preflight-out",
@@ -65,6 +73,11 @@ def main():
     client = SimpleUDPClient(args.host, args.port)
     send = lambda addr, *payload: (client.send_message(addr, payload), print(f"→ {addr} {payload}", flush=True))
 
+    # Resolve search roots (overrides first if provided)
+    search_roots = DEFAULT_SEARCH_ROOTS
+    if args.search_root:
+        search_roots = [Path(p).expanduser() for p in args.search_root]
+
     def scan_wavs(roots):
         wavs = {}
         for root in roots:
@@ -75,7 +88,7 @@ def main():
                 wavs[p.name] = p
         return wavs
 
-    wav_index = scan_wavs(SEARCH_ROOTS)
+    wav_index = scan_wavs(search_roots)
 
     def resolve(path_str: str) -> Path | None:
         p = Path(path_str).expanduser()
@@ -85,8 +98,11 @@ def main():
             return wav_index[p.name]
         return None
 
-    res_a = resolve(TRACK_A)
-    res_b = resolve(TRACK_B)
+    track_a_req = args.track_a or TRACK_A
+    track_b_req = args.track_b or TRACK_B
+
+    res_a = resolve(track_a_req)
+    res_b = resolve(track_b_req)
 
     # Convert to absolute paths for OSC transmission
     if res_a:
@@ -94,18 +110,18 @@ def main():
     if res_b:
         res_b = res_b.resolve()
 
-    print(f"📂 Found {len(wav_index)} WAVs across search roots {', '.join(str(r) for r in SEARCH_ROOTS)}")
-    print(f"🎚️  Track A: {TRACK_A} -> {res_a}")
-    print(f"🎚️  Track B: {TRACK_B} -> {res_b}")
+    print(f"📂 Found {len(wav_index)} WAVs across search roots {', '.join(str(r) for r in search_roots)}")
+    print(f"🎚️  Track A: {track_a_req} -> {res_a}")
+    print(f"🎚️  Track B: {track_b_req} -> {res_b}")
 
     preflight_payload = {
         "timestamp": datetime.now().isoformat(),
-        "search_roots": [str(r) for r in SEARCH_ROOTS],
+        "search_roots": [str(r) for r in search_roots],
         "wav_count": len(wav_index),
         "wavs": [{"name": n, "path": str(p)} for n, p in sorted(wav_index.items())],
         "tracks": {
-            "A": {"requested": TRACK_A, "resolved": str(res_a) if res_a else None, "exists": bool(res_a)},
-            "B": {"requested": TRACK_B, "resolved": str(res_b) if res_b else None, "exists": bool(res_b)},
+            "A": {"requested": track_a_req, "resolved": str(res_a) if res_a else None, "exists": bool(res_a)},
+            "B": {"requested": track_b_req, "resolved": str(res_b) if res_b else None, "exists": bool(res_b)},
         },
     }
     try:
