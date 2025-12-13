@@ -29,14 +29,22 @@ This tool is designed to answer one practical question:
 
 ## Usage
 
+### Setup
+
+```bash
+bash scripts/install.sh
+source .venv/bin/activate
+```
+
 ### Example: export sections at a target BPM using Rekordbox BPM
 
 ```bash
 python struct_loader.py \
   --bpm 122.5 --delta 2 --key "Gm,Cm" \
-  --rekordbox-xml /Users/xaviergonzalez/Documents/repos/crowdstream/track_data_rekordbox.xml \
+  --rekordbox-xml ./track_data_rekordbox.xml \
   --csv-out selected.csv \
-  --parts-dir parts_temp
+  --parts-dir parts_temp \
+  --audio-dir ../stems/dj
 ```
 
 This command:
@@ -50,6 +58,9 @@ This command:
   - original cues (`ini_cue`, `begin_cue`, `end_cue`)
   - adjusted cues (`begin_cue_adj`, `end_cue_adj`)
   - original vs sectioned durations (for debugging)
+- Uses the default struct directory at `<repo_root>/../stems/dj/struct`; override by passing a path argument before any flags if needed.
+- Uses WAVs from `<repo_root>/../stems/dj` by default (override with `--audio-dir`). Paths inside the JSONs are rebased by filename.
+- Many structs have no `key` field; omit `--key` unless you’ve populated keys (e.g., via Rekordbox Tonality).
 
 #### Important notes
 
