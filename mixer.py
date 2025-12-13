@@ -14,7 +14,15 @@
 # - If /deck_eq is unhandled, messages are harmless no-ops.
 
 from pythonosc.udp_client import SimpleUDPClient
-import argparse, time
+import argparse, time, json
+from pathlib import Path
+from datetime import datetime
+
+# Search roots for audio material (stems + generated parts)
+SEARCH_ROOTS = [
+    Path(__file__).resolve().parent.parent / "stems",
+    Path(__file__).resolve().parent / "parts_temp",
+]
 from pathlib import Path
 
 # Search roots for audio material (stems + generated parts)
@@ -46,6 +54,12 @@ def main():
     parser.add_argument("--port", type=int, default=57120, help="Engine OSC port (default: 57120)")
     parser.add_argument("--start-in", type=float, default=0.5, help="Seconds after reset to start both decks together (default: 0.5)")
     parser.add_argument("--preflight-only", action="store_true", help="Scan and resolve tracks, then exit without sending OSC.")
+    parser.add_argument(
+        "--preflight-out",
+        type=Path,
+        default=Path(__file__).resolve().parent / "mixer_preflight.json",
+        help="Write preflight scan results here (default: mixer_preflight.json).",
+    )
     args = parser.parse_args()
 
     client = SimpleUDPClient(args.host, args.port)
@@ -73,9 +87,32 @@ def main():
 
     res_a = resolve(TRACK_A)
     res_b = resolve(TRACK_B)
+
+    # Convert to absolute paths for OSC transmission
+    if res_a:
+        res_a = res_a.resolve()
+    if res_b:
+        res_b = res_b.resolve()
+
     print(f"📂 Found {len(wav_index)} WAVs across search roots {', '.join(str(r) for r in SEARCH_ROOTS)}")
     print(f"🎚️  Track A: {TRACK_A} -> {res_a}")
     print(f"🎚️  Track B: {TRACK_B} -> {res_b}")
+
+    preflight_payload = {
+        "timestamp": datetime.now().isoformat(),
+        "search_roots": [str(r) for r in SEARCH_ROOTS],
+        "wav_count": len(wav_index),
+        "wavs": [{"name": n, "path": str(p)} for n, p in sorted(wav_index.items())],
+        "tracks": {
+            "A": {"requested": TRACK_A, "resolved": str(res_a) if res_a else None, "exists": bool(res_a)},
+            "B": {"requested": TRACK_B, "resolved": str(res_b) if res_b else None, "exists": bool(res_b)},
+        },
+    }
+    try:
+        args.preflight_out.write_text(json.dumps(preflight_payload, indent=2, ensure_ascii=False))
+        print(f"📝 Preflight written to {args.preflight_out}")
+    except Exception as exc:
+        print(f"⚠️  Could not write preflight file: {exc}")
 
     if not res_a or not res_b:
         print("❌ Missing required track(s); aborting.")
