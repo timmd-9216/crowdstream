@@ -437,7 +437,9 @@ class PythonAudioServer:
         disp.map("/cue", self.osc_cue)                   # /cue deck path [start_pos]
         disp.map("/start_group", self.osc_start_group)   # /start_group start_at deck1 deck2 ...
 
-        self.osc_server = ThreadingOSCUDPServer(("127.0.0.1", self.osc_port), disp)
+        # Start OSC server - try IPv6 first, then IPv4
+        # self.osc_server = ThreadingOSCUDPServer(("127.0.0.1", self.osc_port), disp)
+        self.osc_server = ThreadingOSCUDPServer(("0.0.0.0", self.osc_port), disp)
         print(f"🔌 OSC server listening on port {self.osc_port}")
 
     def _deck_to_range(self, deck: str) -> Tuple[int, int]:
