@@ -210,6 +210,9 @@ class StemPlayer:
     def get_audio_chunk(self, chunk_size: int) -> np.ndarray:
         """Retrieve next audio chunk for playback respecting playback rate."""
         if not self.buffer.loaded or not self.playing or self.buffer.audio_data is None:
+            # Detailed debug when returning silence
+            if self.buffer.loaded and self.playing and self.buffer.audio_data is None:
+                print(f"⚠️  Buffer {self.buffer.buffer_id} loaded but audio_data is None!")
             return np.zeros((chunk_size, 2), dtype=np.float32)
 
         output = np.zeros((chunk_size, 2), dtype=np.float32)
@@ -538,16 +541,27 @@ class PythonAudioServer:
             lo, hi = self._deck_to_range(deck)
             buffer_id = lo
             name = f"Deck{deck}"
+            print(f"🔍 /cue {deck} → loading buffer_id={buffer_id}, path={path}")
             self._load_if_needed(buffer_id, path, name)
             # Create/replace a non‑playing player at desired start_pos
-            buf = self.buffers[buffer_id]
+            buf = self.buffers.get(buffer_id)
+            if buf is None:
+                print(f"❌ /cue {deck} failed: buffer {buffer_id} not in self.buffers after load")
+                return
+            if not buf.loaded:
+                print(f"❌ /cue {deck} failed: buffer {buffer_id} loaded=False")
+                return
             player = StemPlayer(buf, rate=1.0, volume=0.8, start_pos=start_pos, loop=True)
             player.playing = False
             self.active_players[buffer_id] = player
             self._armed[deck] = buffer_id
             print(f"🧷 Cued {deck} → {Path(path).name} @pos {start_pos:.3f} (buffer {buffer_id})")
+            print(f"   📋 self._armed now: {self._armed}")
+            print(f"   📋 self.active_players keys: {list(self.active_players.keys())}")
         except Exception as exc:
             print(f"❌ Error in /cue: {exc}")
+            import traceback
+            traceback.print_exc()
 
     def osc_start_group(self, address: str, *args: object) -> None:
         """Start multiple cued decks at the same time (single callback).
@@ -574,25 +588,34 @@ class PythonAudioServer:
 
             def _start_all():
                 t_call = self._now()
+                print(f"🔍 _start_all callback firing at t={t_call:.6f}s")
+                print(f"   📋 self._armed: {self._armed}")
+                print(f"   📋 self.active_players: {list(self.active_players.keys())}")
                 for d in decks:
                     if d not in ("A","B","C","D"):
                         print(f"⚠️  Unknown deck '{d}' in /start_group")
                         continue
                     # Resolve buffer id: prefer armed, else base deck id with existing player
                     bid = self._armed.get(d)
+                    print(f"🔍 Deck {d}: bid from _armed = {bid}")
                     if bid is None:
                         lo, hi = self._deck_to_range(d)
+                        print(f"🔍 Deck {d}: searching active_players in range [{lo}, {hi})")
                         # pick existing active player in range if present
                         for cand in range(lo, hi):
                             if cand in self.active_players:
                                 bid = cand
+                                print(f"🔍 Deck {d}: found active player at buffer {bid}")
                                 break
                     if bid is None:
                         print(f"❌ Deck {d} not armed and no active player")
+                        print(f"   📋 _armed keys: {list(self._armed.keys())}")
+                        print(f"   📋 active_players keys: {list(self.active_players.keys())}")
                         continue
                     pl = self.active_players.get(bid)
                     if pl is None:
                         print(f"❌ No player for deck {d} (buffer {bid})")
+                        print(f"   📋 active_players: {list(self.active_players.keys())}")
                         continue
                     # Reset to cued position and flip playing on
                     # (avoid race if already playing)
@@ -608,6 +631,8 @@ class PythonAudioServer:
             print(f"🗓️  queued /start_group {decks} @ {float(start_at):.3f}s (abs={abs_time:.3f}s)")
         except Exception as exc:
             print(f"❌ Error in /start_group: {exc}")
+            import traceback
+            traceback.print_exc()
 
     def osc_fade(self, address: str, *args: object) -> None:
         """/fade deck start_at [duration] — linear ramp deck volume to 0 over duration."""
