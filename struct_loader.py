@@ -19,6 +19,9 @@ from dataclasses import dataclass
 import subprocess
 import shutil
 
+DEFAULT_STRUCT_DIR = Path(__file__).resolve().parent.parent / "stems" / "dj" / "struct"
+DEFAULT_AUDIO_DIR = Path(__file__).resolve().parent.parent / "stems" / "dj"
+
 
 def search_tracks(
     tracks: Dict[str, "Track"],
@@ -335,6 +338,7 @@ def write_selected_tracks_csv(
     n_sections: int = 6,
     parts_dir: str | Path = Path(__file__).resolve().parent / "parts_temp",
     target_bpm: float | None = None,
+    audio_dir: str | Path | None = None,
 ) -> None:
     """Write selected tracks to CSV and create section WAVs.
 
@@ -399,7 +403,16 @@ def write_selected_tracks_csv(
             begin_cue_adj = (bc - ic) / speed
             end_cue_adj = (ec - ic) / speed
 
-            src = Path(t.path)
+            if audio_dir:
+                # Prefer provided audio directory; fall back to original path if file not found.
+                candidate = Path(audio_dir) / Path(t.path).name
+                src = candidate if candidate.is_file() else Path(t.path)
+            else:
+                src = Path(t.path)
+
+            if not src.is_file():
+                # Skip tracks whose audio file is unavailable.
+                continue
             part_path = parts / f"{src.stem}_sectioned.wav"
 
             parts_orig = parts / "orig"
@@ -652,8 +665,8 @@ def _main() -> None:
     parser.add_argument(
         "struct_dir",
         nargs="?",
-        default="/Users/xaviergonzalez/Documents/repos/crowdstream/dj/struct",
-        help="Directory containing track JSON files (default: user's DJ struct folder)",
+        default=DEFAULT_STRUCT_DIR,
+        help="Directory containing track JSON files (default: repo-relative stems/dj/struct)",
     )
     parser.add_argument(
         "--output",
@@ -704,6 +717,12 @@ def _main() -> None:
         default=None,
         help="Optional Rekordbox XML to override JSON bpm using AverageBpm (matched by file path).",
     )
+    parser.add_argument(
+        "--audio-dir",
+        type=Path,
+        default=DEFAULT_AUDIO_DIR,
+        help="Directory containing WAV files; matched by filename (default: repo-relative stems/dj).",
+    )
     args = parser.parse_args()
 
     tracks = load_track_structs(args.struct_dir)
@@ -741,7 +760,8 @@ def _main() -> None:
             args.csv_out,
             n_sections=args.n_sections,
             parts_dir=args.parts_dir,
-            target_bpm=122.5,
+            target_bpm=args.target_bpm or args.bpm,
+            audio_dir=args.audio_dir,
         )
 
     for t in matches:

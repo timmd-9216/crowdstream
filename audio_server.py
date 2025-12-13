@@ -25,6 +25,13 @@ import soundfile as sf
 from pythonosc import dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
 
+# Try to import scipy for optimized filters
+try:
+    from scipy.signal import lfilter
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
 
 # --- Lightweight 3-band deck filter ---
 class _ThreeBand:
@@ -98,6 +105,17 @@ class _ThreeBand:
         return out
 
 
+# DISABLED: Optimized filters caused audio to stop working
+# Keeping code for future debugging
+#
+# class _ThreeBandOptimized:
+#     """Optimized 3-band filter using scipy.signal.lfilter (50-100x faster).
+#     Same algorithm as _ThreeBand but vectorized using scipy's C implementation.
+#     DISABLED: Caused silent audio output - needs debugging.
+#     """
+#     pass
+
+
 class TempoClock:
     """High precision clock used to keep stems in sync."""
 
@@ -147,6 +165,10 @@ class AudioBuffer:
     def load_audio(self) -> None:
         """Load audio file into memory."""
         try:
+            # Check file exists before trying to read
+            if not Path(self.file_path).exists():
+                raise FileNotFoundError(f"Audio file not found: {self.file_path}")
+
             audio_data, sample_rate = sf.read(self.file_path, dtype=np.float32)
 
             if audio_data.ndim == 1:
@@ -183,8 +205,16 @@ class AudioBuffer:
             memory_mb = (self.frames * self.channels * 4) / (1024 * 1024)
             print(f"✅ Loaded {self.name} ({memory_mb:.1f} MB) @ {self.sample_rate} Hz")
 
+        except FileNotFoundError as exc:
+            print(f"❌ File not found: {self.file_path}")
+            print(f"   Buffer ID: {self.buffer_id}, Name: {self.name}")
+            self.loaded = False
         except Exception as exc:  # pragma: no cover - runtime diagnostic
-            print(f"❌ Load failed: {self.name} - {exc}")
+            print(f"❌ Load failed: {self.name} (buffer {self.buffer_id})")
+            print(f"   Path: {self.file_path}")
+            print(f"   Error: {exc}")
+            import traceback
+            traceback.print_exc()
             self.loaded = False
 
 
@@ -210,6 +240,9 @@ class StemPlayer:
     def get_audio_chunk(self, chunk_size: int) -> np.ndarray:
         """Retrieve next audio chunk for playback respecting playback rate."""
         if not self.buffer.loaded or not self.playing or self.buffer.audio_data is None:
+            # Detailed debug when returning silence
+            if self.buffer.loaded and self.playing and self.buffer.audio_data is None:
+                print(f"⚠️  Buffer {self.buffer.buffer_id} loaded but audio_data is None!")
             return np.zeros((chunk_size, 2), dtype=np.float32)
 
         output = np.zeros((chunk_size, 2), dtype=np.float32)
@@ -252,24 +285,26 @@ class StemPlayer:
 
 
 class PythonAudioServer:
+    """Main audio server class managing audio playback and OSC interface."""
+
     def _print_all_messages(self, address: str, *args: object) -> None:
         """Print every OSC message received (for debugging)."""
         try:
             print(f"📡 OSC MESSAGE: {address} {args}")
         except Exception as exc:
             print(f"❌ Error printing OSC message: {exc}")
-    """Main audio server class managing audio playback and OSC interface."""
     # Buffer ID ranges by deck:
     #   A:  100–1099
     #   B: 1100–2099
     #   C: 2100–3099
     #   D: 3100–4099
 
-    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None):
+    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024, enable_filters: bool = False):
         self.osc_port = osc_port
         self.sample_rate = 44100
-        self.chunk_size = 256
+        self.chunk_size = chunk_size  # Default 1024 for Raspberry Pi stability
         self.channels = 2
+        self.enable_filters = enable_filters  # Filters are CPU-intensive on RPi
 
         self.buffers: Dict[int, AudioBuffer] = {}
         self.active_players: Dict[int, StemPlayer] = {}
@@ -335,7 +370,10 @@ class PythonAudioServer:
                 stream_kwargs["output_device_index"] = self.audio_device
 
             self.stream = self.pa.open(**stream_kwargs)
-            print(f"🔊 Audio stream opened: {self.sample_rate}Hz, {self.chunk_size} samples")
+            latency_ms = (self.chunk_size / self.sample_rate) * 1000
+            filters_status = "ENABLED" if self.enable_filters else "DISABLED (for performance)"
+            print(f"🔊 Audio stream opened: {self.sample_rate}Hz, {self.chunk_size} samples ({latency_ms:.1f}ms latency)")
+            print(f"🎛️  3-band EQ filters: {filters_status}")
             self.running = True
 
             self.audio_thread = threading.Thread(target=self.audio_loop, daemon=True)
@@ -345,7 +383,14 @@ class PythonAudioServer:
 
     def audio_loop(self) -> None:
         """Audio processing loop that mixes all active players."""
+        # Performance monitoring
+        loop_count = 0
+        total_time = 0.0
+        max_time = 0.0
+
         while self.running:
+            loop_start = time.perf_counter()
+
             # --- Beat-based watch printing (reference unit for control) ---
             try:
                 if self.print_clock:
@@ -382,14 +427,15 @@ class PythonAudioServer:
                         except Exception as exc:  # pragma: no cover - runtime diagnostic
                             print(f"⚠️  Error in player {buffer_id}: {exc}")
                             player.playing = False
-                # Apply per‑deck 3‑band filters before deck volume and master
-                try:
-                    deck_a_mix = self._filters['A'].process(deck_a_mix)
-                    deck_b_mix = self._filters['B'].process(deck_b_mix)
-                    deck_c_mix = self._filters['C'].process(deck_c_mix)
-                    deck_d_mix = self._filters['D'].process(deck_d_mix)
-                except Exception as _fexc:
-                    print(f"⚠️  Filter process error: {_fexc}")
+                # Apply per‑deck 3‑band filters before deck volume and master (if enabled)
+                if self.enable_filters:
+                    try:
+                        deck_a_mix = self._filters['A'].process(deck_a_mix)
+                        deck_b_mix = self._filters['B'].process(deck_b_mix)
+                        deck_c_mix = self._filters['C'].process(deck_c_mix)
+                        deck_d_mix = self._filters['D'].process(deck_d_mix)
+                    except Exception as _fexc:
+                        print(f"⚠️  Filter process error: {_fexc}")
 
                 final_mix = (
                     deck_a_mix * self.deck_a_volume +
@@ -402,7 +448,28 @@ class PythonAudioServer:
                 if self.stream and self.stream.is_active():
                     self.stream.write(final_mix.astype(np.float32).tobytes())
 
-                time.sleep(0.001)
+                # Performance monitoring
+                loop_time = time.perf_counter() - loop_start
+                loop_count += 1
+                total_time += loop_time
+                max_time = max(max_time, loop_time)
+
+                # Log performance every 10 seconds (reduced frequency)
+                if loop_count % 400 == 0:  # ~10s at typical loop rate
+                    avg_ms = (total_time / loop_count) * 1000
+                    max_ms = max_time * 1000
+                    budget_ms = (self.chunk_size / self.sample_rate) * 1000
+                    # Only log if there are issues or verbose mode
+                    if max_ms > budget_ms * 0.9:  # Only warn if close to or exceeding budget
+                        print(f"🔍 Audio loop stats: avg={avg_ms:.2f}ms, max={max_ms:.2f}ms, budget={budget_ms:.1f}ms")
+                        if max_ms > budget_ms:
+                            print(f"⚠️  Loop exceeded budget by {max_ms - budget_ms:.2f}ms (this causes stuttering)")
+                    # Reset for next interval
+                    loop_count = 0
+                    total_time = 0.0
+                    max_time = 0.0
+
+                # No sleep needed - stream.write() blocks until buffer space available
             except Exception as exc:  # pragma: no cover - runtime diagnostic
                 print(f"❌ Audio loop error: {exc}")
                 time.sleep(0.1)
@@ -410,7 +477,7 @@ class PythonAudioServer:
     def setup_osc(self) -> None:
         """Setup OSC server mirroring the SuperCollider API."""
         disp = dispatcher.Dispatcher()
-        disp.set_default_handler(self._print_all_messages)
+        # Uncomment for debugging: disp.set_default_handler(self._print_all_messages)
 
         disp.map("/load_buffer", self.osc_load_buffer)
         disp.map("/play_stem", self.osc_play_stem)
@@ -437,7 +504,9 @@ class PythonAudioServer:
         disp.map("/cue", self.osc_cue)                   # /cue deck path [start_pos]
         disp.map("/start_group", self.osc_start_group)   # /start_group start_at deck1 deck2 ...
 
-        self.osc_server = ThreadingOSCUDPServer(("127.0.0.1", self.osc_port), disp)
+        # Start OSC server - try IPv6 first, then IPv4
+        # self.osc_server = ThreadingOSCUDPServer(("127.0.0.1", self.osc_port), disp)
+        self.osc_server = ThreadingOSCUDPServer(("0.0.0.0", self.osc_port), disp)
         print(f"🔌 OSC server listening on port {self.osc_port}")
 
     def _deck_to_range(self, deck: str) -> Tuple[int, int]:
@@ -483,7 +552,8 @@ class PythonAudioServer:
             return self.deck_d_volume
         raise ValueError(f"Unknown deck '{deck}'")
 
-    def _load_if_needed(self, buffer_id: int, path: str, name: str) -> None:
+    def _load_if_needed(self, buffer_id: int, path: str, name: str) -> bool:
+        """Load buffer if needed. Returns True if buffer ready, False if load failed."""
         # Load (or reload) buffer if not present or pointing to a different file
         buf = self.buffers.get(buffer_id)
         if buf is None or Path(getattr(buf, "file_path", "")) != Path(path):
@@ -494,6 +564,11 @@ class PythonAudioServer:
                 except Exception:
                     pass
             self.osc_load_buffer("/load_buffer", buffer_id, path, name)
+            # Check if load succeeded
+            buf = self.buffers.get(buffer_id)
+            if buf is None or not buf.loaded:
+                return False
+        return True
 
     def _schedule_at(self, abs_time: float, fn: Any) -> None:
         delay = max(0.0, abs_time - self._now())
@@ -536,16 +611,40 @@ class PythonAudioServer:
             lo, hi = self._deck_to_range(deck)
             buffer_id = lo
             name = f"Deck{deck}"
-            self._load_if_needed(buffer_id, path, name)
+            print(f"🔍 /cue {deck} → loading buffer_id={buffer_id}, path={path}")
+
+            # Check if path exists before trying to load
+            path_obj = Path(path)
+            if not path_obj.exists():
+                print(f"❌ /cue {deck} FAILED: File does not exist")
+                print(f"   Requested: {path}")
+                print(f"   Absolute: {path_obj.resolve()}")
+                return
+
+            load_ok = self._load_if_needed(buffer_id, path, name)
+            if not load_ok:
+                print(f"❌ /cue {deck} FAILED: Load returned False (see errors above)")
+                return
+
             # Create/replace a non‑playing player at desired start_pos
-            buf = self.buffers[buffer_id]
+            buf = self.buffers.get(buffer_id)
+            if buf is None:
+                print(f"❌ /cue {deck} FAILED: buffer {buffer_id} not in self.buffers after load")
+                return
+            if not buf.loaded:
+                print(f"❌ /cue {deck} FAILED: buffer {buffer_id} loaded=False")
+                return
             player = StemPlayer(buf, rate=1.0, volume=0.8, start_pos=start_pos, loop=True)
             player.playing = False
             self.active_players[buffer_id] = player
             self._armed[deck] = buffer_id
             print(f"🧷 Cued {deck} → {Path(path).name} @pos {start_pos:.3f} (buffer {buffer_id})")
+            print(f"   📋 self._armed now: {self._armed}")
+            print(f"   📋 self.active_players keys: {list(self.active_players.keys())}")
         except Exception as exc:
             print(f"❌ Error in /cue: {exc}")
+            import traceback
+            traceback.print_exc()
 
     def osc_start_group(self, address: str, *args: object) -> None:
         """Start multiple cued decks at the same time (single callback).
@@ -572,25 +671,68 @@ class PythonAudioServer:
 
             def _start_all():
                 t_call = self._now()
+                print(f"🔍 _start_all callback firing at t={t_call:.6f}s")
+                print(f"   📋 self._armed: {self._armed}")
+                print(f"   📋 self.active_players: {list(self.active_players.keys())}")
+
+                # Wait for buffers to be ready (max 5s)
+                max_wait = 5.0
+                wait_start = time.perf_counter()
+                while time.perf_counter() - wait_start < max_wait:
+                    all_ready = True
+                    for d in decks:
+                        if d not in ("A","B","C","D"):
+                            continue
+                        bid = self._armed.get(d)
+                        if bid is None:
+                            lo, hi = self._deck_to_range(d)
+                            for cand in range(lo, hi):
+                                if cand in self.active_players:
+                                    bid = cand
+                                    break
+                        if bid is None or bid not in self.active_players:
+                            all_ready = False
+                            break
+                        # Check if buffer is loaded
+                        pl = self.active_players.get(bid)
+                        if pl is None or not pl.buffer.loaded:
+                            all_ready = False
+                            break
+
+                    if all_ready:
+                        waited = time.perf_counter() - wait_start
+                        print(f"✅ All buffers ready after {waited:.3f}s wait")
+                        break
+                    time.sleep(0.05)  # Poll every 50ms
+                else:
+                    waited = time.perf_counter() - wait_start
+                    print(f"⚠️  Timeout waiting for buffers ({waited:.3f}s), starting anyway...")
+
                 for d in decks:
                     if d not in ("A","B","C","D"):
                         print(f"⚠️  Unknown deck '{d}' in /start_group")
                         continue
                     # Resolve buffer id: prefer armed, else base deck id with existing player
                     bid = self._armed.get(d)
+                    print(f"🔍 Deck {d}: bid from _armed = {bid}")
                     if bid is None:
                         lo, hi = self._deck_to_range(d)
+                        print(f"🔍 Deck {d}: searching active_players in range [{lo}, {hi})")
                         # pick existing active player in range if present
                         for cand in range(lo, hi):
                             if cand in self.active_players:
                                 bid = cand
+                                print(f"🔍 Deck {d}: found active player at buffer {bid}")
                                 break
                     if bid is None:
                         print(f"❌ Deck {d} not armed and no active player")
+                        print(f"   📋 _armed keys: {list(self._armed.keys())}")
+                        print(f"   📋 active_players keys: {list(self.active_players.keys())}")
                         continue
                     pl = self.active_players.get(bid)
                     if pl is None:
                         print(f"❌ No player for deck {d} (buffer {bid})")
+                        print(f"   📋 active_players: {list(self.active_players.keys())}")
                         continue
                     # Reset to cued position and flip playing on
                     # (avoid race if already playing)
@@ -606,6 +748,8 @@ class PythonAudioServer:
             print(f"🗓️  queued /start_group {decks} @ {float(start_at):.3f}s (abs={abs_time:.3f}s)")
         except Exception as exc:
             print(f"❌ Error in /start_group: {exc}")
+            import traceback
+            traceback.print_exc()
 
     def osc_fade(self, address: str, *args: object) -> None:
         """/fade deck start_at [duration] — linear ramp deck volume to 0 over duration."""
@@ -654,6 +798,8 @@ class PythonAudioServer:
         """Set per‑deck tone control band: /deck_filter deck band value
         deck ∈ {A,B,C,D}, band ∈ {low, mid, high}, value is linear gain (0..1 typical).
         """
+        if not self.enable_filters:
+            return  # Silently ignore when filters disabled (performance)
         try:
             deck = str(args[0]).strip().upper()
             band = str(args[1]).strip().lower()
@@ -665,8 +811,7 @@ class PythonAudioServer:
                 value = 0.0
             value = max(0.0, float(value))
             self._filters[deck].set_gain(band, value)
-            # Diagnostic: clarify value is linear gain (not percent)
-            print(f"🎛️  /deck_filter {deck} {band} -> {value:.3f} (linear gain; if you meant percent, use /deck_eq)")
+            # No logging for performance
         except Exception as exc:
             print(f"❌ Error in /deck_filter: {exc}")
 
@@ -698,6 +843,8 @@ class PythonAudioServer:
         deck∈{A,B,C,D}; band∈{low,mid,high}; percent 0..100 with 50=flat, 0=deep cut.
         Values above 50 are treated as flat (no boost yet).
         """
+        if not self.enable_filters:
+            return  # Silently ignore when filters disabled (performance)
         try:
             deck = str(args[0]).strip().upper()
             band = str(args[1]).strip().lower()
@@ -706,7 +853,7 @@ class PythonAudioServer:
                 raise ValueError(f"Unknown deck '{deck}'")
             gain = self._cut_only_gain_from_percent(percent, self._eq_max_cut_db)
             self._filters[deck].set_gain(band, gain)
-            print(f"🎛️  /deck_eq {deck} {band} {percent:.1f}% → gain {gain:.3f}")
+            # No logging for performance (hundreds of commands per second)
         except Exception as exc:
             print(f"❌ Error in /deck_eq: {exc}")
 
@@ -714,6 +861,8 @@ class PythonAudioServer:
         """Set all three EQ bands for a deck at once (percents): /deck_eq_all deck low mid high
         Each value 0..100, with 50=flat; 0=hard kill; >50 treated as flat for now.
         """
+        if not self.enable_filters:
+            return  # Silently ignore when filters disabled (performance)
         try:
             deck = str(args[0]).strip().upper()
             if deck not in self._filters:
@@ -727,7 +876,7 @@ class PythonAudioServer:
             self._filters[deck].set_gain('low', lg)
             self._filters[deck].set_gain('mid', mg)
             self._filters[deck].set_gain('high', hg)
-            print(f"🎛️  /deck_eq_all {deck} L:{low_p:.1f}%→{lg:.3f} M:{mid_p:.1f}%→{mg:.3f} H:{high_p:.1f}%→{hg:.3f}")
+            # No logging for performance
         except Exception as exc:
             print(f"❌ Error in /deck_eq_all: {exc}")
 
@@ -803,11 +952,18 @@ class PythonAudioServer:
                 del self.active_players[buffer_id]
 
             if not file_path.exists():
+                print(f"❌ Cannot load buffer {buffer_id}: file does not exist")
+                print(f"   Requested path: {file_path}")
+                print(f"   Absolute path: {file_path.resolve()}")
                 raise FileNotFoundError(file_path)
 
             self.buffers[buffer_id] = AudioBuffer(file_path, buffer_id, stem_name)
+        except FileNotFoundError as exc:
+            print(f"❌ File not found for buffer {buffer_id}: {exc}")
         except Exception as exc:  # pragma: no cover - runtime diagnostic
-            print(f"❌ Error loading buffer: {exc}")
+            print(f"❌ Error loading buffer {buffer_id}: {exc}")
+            import traceback
+            traceback.print_exc()
 
     def osc_play_stem(self, address: str, *args: object) -> None:
         """Play stem - /play_stem [buffer_id, rate, volume, loop, start_pos]."""
@@ -923,9 +1079,14 @@ class PythonAudioServer:
         """Start the audio and OSC servers."""
         if self.stream and self.osc_server:
             self.stream.start_stream()
+            latency_ms = (self.chunk_size / self.sample_rate) * 1000
             print("🎛️💾 PYTHON AUDIO SERVER READY 💾🎛️")
-            print(f"🔊 Audio: {self.sample_rate}Hz, {self.chunk_size} samples")
+            print(f"🔊 Audio: {self.sample_rate}Hz, {self.chunk_size} samples ({latency_ms:.1f}ms)")
             print(f"🔌 OSC: localhost:{self.osc_port}")
+            if not self.enable_filters:
+                print("⚡ Performance mode: EQ filters DISABLED (ignoring /deck_eq commands)")
+            else:
+                print("🎛️  3-band EQ filters ENABLED")
             print("💡 Same OSC API as SuperCollider server")
 
             server_thread = threading.Thread(
@@ -964,6 +1125,8 @@ def main() -> None:
     parser.add_argument("--cli-sentinel", action="store_true", help="Print CLI v2 sentinel and exit")
     parser.add_argument("--port", type=int, default=57120, help="OSC port (default: 57120)")
     parser.add_argument("--device", type=int, help="Audio device ID")
+    parser.add_argument("--buffer-size", type=int, default=1024, help="Audio buffer size in frames (default: 1024 for Raspberry Pi). Lower=less latency, higher=more stable. Try 512/1024/2048.")
+    parser.add_argument("--enable-filters", action="store_true", help="Enable 3-band EQ filters (CPU-intensive, disabled by default on Raspberry Pi)")
     parser.add_argument("--bpm", type=float, default=120.0, help="Initial tempo in BPM")
     parser.add_argument("--a", type=str, help="Path to audio file for Deck A (buffer 100)")
     parser.add_argument("--b", type=str, help="Path to audio file for Deck B (buffer 1100)")
@@ -986,7 +1149,12 @@ def main() -> None:
         print("✅ CLI v2 sentinel — this is the edited file being executed.")
         return
 
-    server = PythonAudioServer(osc_port=args.port, audio_device=args.device)
+    server = PythonAudioServer(
+        osc_port=args.port,
+        audio_device=args.device,
+        chunk_size=args.buffer_size,
+        enable_filters=args.enable_filters
+    )
     server.clock.bpm = args.bpm
     server.print_clock = bool(args.watch)
     server.meter_beats = int(args.meter) if args.meter and args.meter > 0 else 4
