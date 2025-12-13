@@ -591,6 +591,40 @@ class PythonAudioServer:
                 print(f"🔍 _start_all callback firing at t={t_call:.6f}s")
                 print(f"   📋 self._armed: {self._armed}")
                 print(f"   📋 self.active_players: {list(self.active_players.keys())}")
+
+                # Wait for buffers to be ready (max 5s)
+                max_wait = 5.0
+                wait_start = time.perf_counter()
+                while time.perf_counter() - wait_start < max_wait:
+                    all_ready = True
+                    for d in decks:
+                        if d not in ("A","B","C","D"):
+                            continue
+                        bid = self._armed.get(d)
+                        if bid is None:
+                            lo, hi = self._deck_to_range(d)
+                            for cand in range(lo, hi):
+                                if cand in self.active_players:
+                                    bid = cand
+                                    break
+                        if bid is None or bid not in self.active_players:
+                            all_ready = False
+                            break
+                        # Check if buffer is loaded
+                        pl = self.active_players.get(bid)
+                        if pl is None or not pl.buffer.loaded:
+                            all_ready = False
+                            break
+
+                    if all_ready:
+                        waited = time.perf_counter() - wait_start
+                        print(f"✅ All buffers ready after {waited:.3f}s wait")
+                        break
+                    time.sleep(0.05)  # Poll every 50ms
+                else:
+                    waited = time.perf_counter() - wait_start
+                    print(f"⚠️  Timeout waiting for buffers ({waited:.3f}s), starting anyway...")
+
                 for d in decks:
                     if d not in ("A","B","C","D"):
                         print(f"⚠️  Unknown deck '{d}' in /start_group")
