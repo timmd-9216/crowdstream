@@ -285,13 +285,14 @@ class StemPlayer:
 
 
 class PythonAudioServer:
+    """Main audio server class managing audio playback and OSC interface."""
+
     def _print_all_messages(self, address: str, *args: object) -> None:
         """Print every OSC message received (for debugging)."""
         try:
             print(f"📡 OSC MESSAGE: {address} {args}")
         except Exception as exc:
             print(f"❌ Error printing OSC message: {exc}")
-    """Main audio server class managing audio playback and OSC interface."""
     # Buffer ID ranges by deck:
     #   A:  100–1099
     #   B: 1100–2099
@@ -476,7 +477,7 @@ class PythonAudioServer:
     def setup_osc(self) -> None:
         """Setup OSC server mirroring the SuperCollider API."""
         disp = dispatcher.Dispatcher()
-        disp.set_default_handler(self._print_all_messages)
+        # Uncomment for debugging: disp.set_default_handler(self._print_all_messages)
 
         disp.map("/load_buffer", self.osc_load_buffer)
         disp.map("/play_stem", self.osc_play_stem)
