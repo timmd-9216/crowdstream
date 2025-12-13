@@ -147,6 +147,10 @@ class AudioBuffer:
     def load_audio(self) -> None:
         """Load audio file into memory."""
         try:
+            # Check file exists before trying to read
+            if not Path(self.file_path).exists():
+                raise FileNotFoundError(f"Audio file not found: {self.file_path}")
+
             audio_data, sample_rate = sf.read(self.file_path, dtype=np.float32)
 
             if audio_data.ndim == 1:
@@ -183,8 +187,16 @@ class AudioBuffer:
             memory_mb = (self.frames * self.channels * 4) / (1024 * 1024)
             print(f"✅ Loaded {self.name} ({memory_mb:.1f} MB) @ {self.sample_rate} Hz")
 
+        except FileNotFoundError as exc:
+            print(f"❌ File not found: {self.file_path}")
+            print(f"   Buffer ID: {self.buffer_id}, Name: {self.name}")
+            self.loaded = False
         except Exception as exc:  # pragma: no cover - runtime diagnostic
-            print(f"❌ Load failed: {self.name} - {exc}")
+            print(f"❌ Load failed: {self.name} (buffer {self.buffer_id})")
+            print(f"   Path: {self.file_path}")
+            print(f"   Error: {exc}")
+            import traceback
+            traceback.print_exc()
             self.loaded = False
 
 
@@ -488,7 +500,8 @@ class PythonAudioServer:
             return self.deck_d_volume
         raise ValueError(f"Unknown deck '{deck}'")
 
-    def _load_if_needed(self, buffer_id: int, path: str, name: str) -> None:
+    def _load_if_needed(self, buffer_id: int, path: str, name: str) -> bool:
+        """Load buffer if needed. Returns True if buffer ready, False if load failed."""
         # Load (or reload) buffer if not present or pointing to a different file
         buf = self.buffers.get(buffer_id)
         if buf is None or Path(getattr(buf, "file_path", "")) != Path(path):
@@ -499,6 +512,11 @@ class PythonAudioServer:
                 except Exception:
                     pass
             self.osc_load_buffer("/load_buffer", buffer_id, path, name)
+            # Check if load succeeded
+            buf = self.buffers.get(buffer_id)
+            if buf is None or not buf.loaded:
+                return False
+        return True
 
     def _schedule_at(self, abs_time: float, fn: Any) -> None:
         delay = max(0.0, abs_time - self._now())
@@ -542,14 +560,27 @@ class PythonAudioServer:
             buffer_id = lo
             name = f"Deck{deck}"
             print(f"🔍 /cue {deck} → loading buffer_id={buffer_id}, path={path}")
-            self._load_if_needed(buffer_id, path, name)
+
+            # Check if path exists before trying to load
+            path_obj = Path(path)
+            if not path_obj.exists():
+                print(f"❌ /cue {deck} FAILED: File does not exist")
+                print(f"   Requested: {path}")
+                print(f"   Absolute: {path_obj.resolve()}")
+                return
+
+            load_ok = self._load_if_needed(buffer_id, path, name)
+            if not load_ok:
+                print(f"❌ /cue {deck} FAILED: Load returned False (see errors above)")
+                return
+
             # Create/replace a non‑playing player at desired start_pos
             buf = self.buffers.get(buffer_id)
             if buf is None:
-                print(f"❌ /cue {deck} failed: buffer {buffer_id} not in self.buffers after load")
+                print(f"❌ /cue {deck} FAILED: buffer {buffer_id} not in self.buffers after load")
                 return
             if not buf.loaded:
-                print(f"❌ /cue {deck} failed: buffer {buffer_id} loaded=False")
+                print(f"❌ /cue {deck} FAILED: buffer {buffer_id} loaded=False")
                 return
             player = StemPlayer(buf, rate=1.0, volume=0.8, start_pos=start_pos, loop=True)
             player.playing = False
@@ -864,11 +895,18 @@ class PythonAudioServer:
                 del self.active_players[buffer_id]
 
             if not file_path.exists():
+                print(f"❌ Cannot load buffer {buffer_id}: file does not exist")
+                print(f"   Requested path: {file_path}")
+                print(f"   Absolute path: {file_path.resolve()}")
                 raise FileNotFoundError(file_path)
 
             self.buffers[buffer_id] = AudioBuffer(file_path, buffer_id, stem_name)
+        except FileNotFoundError as exc:
+            print(f"❌ File not found for buffer {buffer_id}: {exc}")
         except Exception as exc:  # pragma: no cover - runtime diagnostic
-            print(f"❌ Error loading buffer: {exc}")
+            print(f"❌ Error loading buffer {buffer_id}: {exc}")
+            import traceback
+            traceback.print_exc()
 
     def osc_play_stem(self, address: str, *args: object) -> None:
         """Play stem - /play_stem [buffer_id, rate, volume, loop, start_pos]."""
