@@ -280,10 +280,10 @@ class PythonAudioServer:
     #   C: 2100–3099
     #   D: 3100–4099
 
-    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None):
+    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024):
         self.osc_port = osc_port
         self.sample_rate = 44100
-        self.chunk_size = 256
+        self.chunk_size = chunk_size  # Default 1024 for Raspberry Pi stability
         self.channels = 2
 
         self.buffers: Dict[int, AudioBuffer] = {}
@@ -350,7 +350,8 @@ class PythonAudioServer:
                 stream_kwargs["output_device_index"] = self.audio_device
 
             self.stream = self.pa.open(**stream_kwargs)
-            print(f"🔊 Audio stream opened: {self.sample_rate}Hz, {self.chunk_size} samples")
+            latency_ms = (self.chunk_size / self.sample_rate) * 1000
+            print(f"🔊 Audio stream opened: {self.sample_rate}Hz, {self.chunk_size} samples ({latency_ms:.1f}ms latency)")
             self.running = True
 
             self.audio_thread = threading.Thread(target=self.audio_loop, daemon=True)
@@ -1022,8 +1023,9 @@ class PythonAudioServer:
         """Start the audio and OSC servers."""
         if self.stream and self.osc_server:
             self.stream.start_stream()
+            latency_ms = (self.chunk_size / self.sample_rate) * 1000
             print("🎛️💾 PYTHON AUDIO SERVER READY 💾🎛️")
-            print(f"🔊 Audio: {self.sample_rate}Hz, {self.chunk_size} samples")
+            print(f"🔊 Audio: {self.sample_rate}Hz, {self.chunk_size} samples ({latency_ms:.1f}ms)")
             print(f"🔌 OSC: localhost:{self.osc_port}")
             print("💡 Same OSC API as SuperCollider server")
 
@@ -1063,6 +1065,7 @@ def main() -> None:
     parser.add_argument("--cli-sentinel", action="store_true", help="Print CLI v2 sentinel and exit")
     parser.add_argument("--port", type=int, default=57120, help="OSC port (default: 57120)")
     parser.add_argument("--device", type=int, help="Audio device ID")
+    parser.add_argument("--buffer-size", type=int, default=1024, help="Audio buffer size in frames (default: 1024 for Raspberry Pi). Lower=less latency, higher=more stable. Try 512/1024/2048.")
     parser.add_argument("--bpm", type=float, default=120.0, help="Initial tempo in BPM")
     parser.add_argument("--a", type=str, help="Path to audio file for Deck A (buffer 100)")
     parser.add_argument("--b", type=str, help="Path to audio file for Deck B (buffer 1100)")
@@ -1085,7 +1088,7 @@ def main() -> None:
         print("✅ CLI v2 sentinel — this is the edited file being executed.")
         return
 
-    server = PythonAudioServer(osc_port=args.port, audio_device=args.device)
+    server = PythonAudioServer(osc_port=args.port, audio_device=args.device, chunk_size=args.buffer_size)
     server.clock.bpm = args.bpm
     server.print_clock = bool(args.watch)
     server.meter_beats = int(args.meter) if args.meter and args.meter > 0 else 4

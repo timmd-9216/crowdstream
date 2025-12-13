@@ -1,4 +1,48 @@
-# Track Section Exporter (`struct_loader.py`)
+# Crowdstream - Real-Time Audio Server & DJ Tools
+
+## Audio Server (`audio_server.py`)
+
+A Python-based real-time audio engine with OSC control, designed as a lightweight replacement for SuperCollider.
+
+### Quick Start
+
+```bash
+# Basic usage (default buffer size optimized for Raspberry Pi)
+python audio_server.py
+
+# Custom buffer size
+python audio_server.py --buffer-size 512
+
+# With pre-loaded tracks
+python audio_server.py --a track1.wav --b track2.wav
+```
+
+### Audio Stability on Raspberry Pi
+
+If you experience **ALSA underrun warnings** or **audio glitches**, the buffer size controls the stability/latency tradeoff:
+
+```bash
+# Most stable (recommended for Raspberry Pi 4)
+python audio_server.py --buffer-size 1024  # 23ms latency
+
+# Balanced (good for Raspberry Pi 5 or desktop)
+python audio_server.py --buffer-size 512   # 12ms latency
+
+# Lowest latency (requires powerful CPU)
+python audio_server.py --buffer-size 256   # 6ms latency
+```
+
+**See [AUDIO_BUFFER_SIZE_TUNING.md](AUDIO_BUFFER_SIZE_TUNING.md)** for detailed tuning guide.
+
+### Recent Fixes
+
+- **Race condition fix**: `/start_group` now waits for buffers to load before starting playback ([details](AUDIO_SERVER_RACE_CONDITION_FIX.md))
+- **Enhanced error logging**: Detailed file-not-found diagnostics ([details](ERROR_LOGGING_IMPROVEMENTS.md))
+- **Buffer size tuning**: Configurable latency/stability tradeoff
+
+---
+
+## Track Section Exporter (`struct_loader.py`)
 
 A DJ-focused utility to extract **mix-ready audio sections** from tracks using
 precomputed structure JSONs, with **accurate BPM handling via Rekordbox** and
@@ -6,7 +50,7 @@ full **debug visibility** through a rich CSV output.
 
 This tool is designed to answer one practical question:
 
-> *“Give me consistent, tempo-aligned sections I can actually mix.”*
+> *"Give me consistent, tempo-aligned sections I can actually mix."*
 
 ---
 
