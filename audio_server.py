@@ -280,11 +280,12 @@ class PythonAudioServer:
     #   C: 2100–3099
     #   D: 3100–4099
 
-    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024):
+    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024, enable_filters: bool = False):
         self.osc_port = osc_port
         self.sample_rate = 44100
         self.chunk_size = chunk_size  # Default 1024 for Raspberry Pi stability
         self.channels = 2
+        self.enable_filters = enable_filters  # Filters are CPU-intensive on RPi
 
         self.buffers: Dict[int, AudioBuffer] = {}
         self.active_players: Dict[int, StemPlayer] = {}
@@ -351,7 +352,9 @@ class PythonAudioServer:
 
             self.stream = self.pa.open(**stream_kwargs)
             latency_ms = (self.chunk_size / self.sample_rate) * 1000
+            filters_status = "ENABLED (CPU-intensive)" if self.enable_filters else "DISABLED (for performance)"
             print(f"🔊 Audio stream opened: {self.sample_rate}Hz, {self.chunk_size} samples ({latency_ms:.1f}ms latency)")
+            print(f"🎛️  3-band EQ filters: {filters_status}")
             self.running = True
 
             self.audio_thread = threading.Thread(target=self.audio_loop, daemon=True)
@@ -361,7 +364,14 @@ class PythonAudioServer:
 
     def audio_loop(self) -> None:
         """Audio processing loop that mixes all active players."""
+        # Performance monitoring
+        loop_count = 0
+        total_time = 0.0
+        max_time = 0.0
+
         while self.running:
+            loop_start = time.perf_counter()
+
             # --- Beat-based watch printing (reference unit for control) ---
             try:
                 if self.print_clock:
@@ -398,14 +408,15 @@ class PythonAudioServer:
                         except Exception as exc:  # pragma: no cover - runtime diagnostic
                             print(f"⚠️  Error in player {buffer_id}: {exc}")
                             player.playing = False
-                # Apply per‑deck 3‑band filters before deck volume and master
-                try:
-                    deck_a_mix = self._filters['A'].process(deck_a_mix)
-                    deck_b_mix = self._filters['B'].process(deck_b_mix)
-                    deck_c_mix = self._filters['C'].process(deck_c_mix)
-                    deck_d_mix = self._filters['D'].process(deck_d_mix)
-                except Exception as _fexc:
-                    print(f"⚠️  Filter process error: {_fexc}")
+                # Apply per‑deck 3‑band filters before deck volume and master (if enabled)
+                if self.enable_filters:
+                    try:
+                        deck_a_mix = self._filters['A'].process(deck_a_mix)
+                        deck_b_mix = self._filters['B'].process(deck_b_mix)
+                        deck_c_mix = self._filters['C'].process(deck_c_mix)
+                        deck_d_mix = self._filters['D'].process(deck_d_mix)
+                    except Exception as _fexc:
+                        print(f"⚠️  Filter process error: {_fexc}")
 
                 final_mix = (
                     deck_a_mix * self.deck_a_volume +
@@ -417,6 +428,25 @@ class PythonAudioServer:
 
                 if self.stream and self.stream.is_active():
                     self.stream.write(final_mix.astype(np.float32).tobytes())
+
+                # Performance monitoring
+                loop_time = time.perf_counter() - loop_start
+                loop_count += 1
+                total_time += loop_time
+                max_time = max(max_time, loop_time)
+
+                # Log performance every 5 seconds
+                if loop_count % 200 == 0:  # ~5s at typical loop rate
+                    avg_ms = (total_time / loop_count) * 1000
+                    max_ms = max_time * 1000
+                    budget_ms = (self.chunk_size / self.sample_rate) * 1000
+                    print(f"🔍 Audio loop stats: avg={avg_ms:.2f}ms, max={max_ms:.2f}ms, budget={budget_ms:.1f}ms")
+                    if max_ms > budget_ms:
+                        print(f"⚠️  Loop exceeded budget by {max_ms - budget_ms:.2f}ms (this causes stuttering)")
+                    # Reset for next interval
+                    loop_count = 0
+                    total_time = 0.0
+                    max_time = 0.0
 
                 time.sleep(0.001)
             except Exception as exc:  # pragma: no cover - runtime diagnostic
@@ -1066,6 +1096,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=57120, help="OSC port (default: 57120)")
     parser.add_argument("--device", type=int, help="Audio device ID")
     parser.add_argument("--buffer-size", type=int, default=1024, help="Audio buffer size in frames (default: 1024 for Raspberry Pi). Lower=less latency, higher=more stable. Try 512/1024/2048.")
+    parser.add_argument("--enable-filters", action="store_true", help="Enable 3-band EQ filters (CPU-intensive, disabled by default on Raspberry Pi)")
     parser.add_argument("--bpm", type=float, default=120.0, help="Initial tempo in BPM")
     parser.add_argument("--a", type=str, help="Path to audio file for Deck A (buffer 100)")
     parser.add_argument("--b", type=str, help="Path to audio file for Deck B (buffer 1100)")
@@ -1088,7 +1119,12 @@ def main() -> None:
         print("✅ CLI v2 sentinel — this is the edited file being executed.")
         return
 
-    server = PythonAudioServer(osc_port=args.port, audio_device=args.device, chunk_size=args.buffer_size)
+    server = PythonAudioServer(
+        osc_port=args.port,
+        audio_device=args.device,
+        chunk_size=args.buffer_size,
+        enable_filters=args.enable_filters
+    )
     server.clock.bpm = args.bpm
     server.print_clock = bool(args.watch)
     server.meter_beats = int(args.meter) if args.meter and args.meter > 0 else 4
