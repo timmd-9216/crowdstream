@@ -435,20 +435,22 @@ class PythonAudioServer:
                 total_time += loop_time
                 max_time = max(max_time, loop_time)
 
-                # Log performance every 5 seconds
-                if loop_count % 200 == 0:  # ~5s at typical loop rate
+                # Log performance every 10 seconds (reduced frequency)
+                if loop_count % 400 == 0:  # ~10s at typical loop rate
                     avg_ms = (total_time / loop_count) * 1000
                     max_ms = max_time * 1000
                     budget_ms = (self.chunk_size / self.sample_rate) * 1000
-                    print(f"🔍 Audio loop stats: avg={avg_ms:.2f}ms, max={max_ms:.2f}ms, budget={budget_ms:.1f}ms")
-                    if max_ms > budget_ms:
-                        print(f"⚠️  Loop exceeded budget by {max_ms - budget_ms:.2f}ms (this causes stuttering)")
+                    # Only log if there are issues or verbose mode
+                    if max_ms > budget_ms * 0.9:  # Only warn if close to or exceeding budget
+                        print(f"🔍 Audio loop stats: avg={avg_ms:.2f}ms, max={max_ms:.2f}ms, budget={budget_ms:.1f}ms")
+                        if max_ms > budget_ms:
+                            print(f"⚠️  Loop exceeded budget by {max_ms - budget_ms:.2f}ms (this causes stuttering)")
                     # Reset for next interval
                     loop_count = 0
                     total_time = 0.0
                     max_time = 0.0
 
-                time.sleep(0.001)
+                # No sleep needed - stream.write() blocks until buffer space available
             except Exception as exc:  # pragma: no cover - runtime diagnostic
                 print(f"❌ Audio loop error: {exc}")
                 time.sleep(0.1)
@@ -777,6 +779,8 @@ class PythonAudioServer:
         """Set per‑deck tone control band: /deck_filter deck band value
         deck ∈ {A,B,C,D}, band ∈ {low, mid, high}, value is linear gain (0..1 typical).
         """
+        if not self.enable_filters:
+            return  # Silently ignore when filters disabled (performance)
         try:
             deck = str(args[0]).strip().upper()
             band = str(args[1]).strip().lower()
@@ -821,6 +825,8 @@ class PythonAudioServer:
         deck∈{A,B,C,D}; band∈{low,mid,high}; percent 0..100 with 50=flat, 0=deep cut.
         Values above 50 are treated as flat (no boost yet).
         """
+        if not self.enable_filters:
+            return  # Silently ignore when filters disabled (performance)
         try:
             deck = str(args[0]).strip().upper()
             band = str(args[1]).strip().lower()
@@ -837,6 +843,8 @@ class PythonAudioServer:
         """Set all three EQ bands for a deck at once (percents): /deck_eq_all deck low mid high
         Each value 0..100, with 50=flat; 0=hard kill; >50 treated as flat for now.
         """
+        if not self.enable_filters:
+            return  # Silently ignore when filters disabled (performance)
         try:
             deck = str(args[0]).strip().upper()
             if deck not in self._filters:
@@ -1057,6 +1065,10 @@ class PythonAudioServer:
             print("🎛️💾 PYTHON AUDIO SERVER READY 💾🎛️")
             print(f"🔊 Audio: {self.sample_rate}Hz, {self.chunk_size} samples ({latency_ms:.1f}ms)")
             print(f"🔌 OSC: localhost:{self.osc_port}")
+            if not self.enable_filters:
+                print("⚡ Performance mode: EQ filters DISABLED (ignoring /deck_eq commands)")
+            else:
+                print("🎛️  3-band EQ filters ENABLED (CPU-intensive)")
             print("💡 Same OSC API as SuperCollider server")
 
             server_thread = threading.Thread(
