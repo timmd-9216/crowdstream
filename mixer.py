@@ -81,7 +81,8 @@ def main():
 
     # Reset, set levels/EQ, cue both, then start together
     send("/reset", [])
-    send("/deck_levels", 0.5, 0.5, 0.0, 0.0)
+    # Start with full deck volumes for A/B
+    send("/deck_levels", 1.0, 1.0, 0.0, 0.0)
     send("/deck_eq_all", "A", 50, 50, 50)
     send("/deck_eq_all", "B", 50, 50, 50)
 
