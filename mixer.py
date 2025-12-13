@@ -138,9 +138,9 @@ def main():
         return
 
     # === EQ constraint config ===
-    SUM_BUDGET = 50   # A_band + B_band must be <= 50 (50% = flat)
-    CAP = 35          # Non-linear cap per deck per band (<= 35%)
-    BASE_SPLIT = 35   # Neutral split per band (A=25, B=25)
+    SUM_BUDGET = 100  # Allow both decks to sit at flat (50% each) without attenuation
+    CAP = 50          # Max per-band percent (50 = flat in cut-only mapping)
+    BASE_SPLIT = 50   # Neutral split per band (A=50, B=50 = flat)
 
     def enforce_pair(a_desired: int, b_desired: int, cap: int = CAP, budget: int = SUM_BUDGET) -> tuple[int,int]:
         a = min(cap, max(0, int(a_desired)))
