@@ -9,7 +9,9 @@ disp.map("/dance/*movement", on_movement)
 disp.map("/dance/pose/person/*/keypoints", on_keypoints)
 disp.map("/pose/keypoints", on_keypoints)  # legacy
 
-server = osc_server.ThreadingOSCUDPServer(("0.0.0.0", 57120), disp)
+#server = osc_server.ThreadingOSCUDPServer(("0.0.0.0", 57120), disp)
+#server = osc_server.ThreadingOSCUDPServer(("127.0.0.1", 5009), disp)
+server = osc_server.ThreadingOSCUDPServer(("127.0.0.1", 57120), disp)
 print("Listening on", server.server_address)
 server.serve_forever()
 
