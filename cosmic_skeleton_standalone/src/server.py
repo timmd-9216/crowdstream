@@ -17,10 +17,12 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 import cv2
+import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pythonosc import udp_client
 from ultralytics import YOLO
 import uvicorn
 
@@ -40,14 +42,150 @@ class PoseData:
         }
 
 
+class MovementTracker:
+    """Tracks movement metrics for dance analysis"""
+
+    # YOLO pose keypoint indices
+    NOSE = 0
+    LEFT_SHOULDER, RIGHT_SHOULDER = 5, 6
+    LEFT_ELBOW, RIGHT_ELBOW = 7, 8
+    LEFT_WRIST, RIGHT_WRIST = 9, 10
+    LEFT_HIP, RIGHT_HIP = 11, 12
+    LEFT_KNEE, RIGHT_KNEE = 13, 14
+    LEFT_ANKLE, RIGHT_ANKLE = 15, 16
+
+    def __init__(self, history_size: int = 30):
+        """
+        Args:
+            history_size: Number of frames to keep for movement calculation
+        """
+        self.history: Dict[int, deque] = {}  # person_id -> deque of keypoints
+        self.history_size = history_size
+
+    def update(self, poses: Dict[int, PoseData]):
+        """Update movement history with new poses"""
+        current_ids = set(poses.keys())
+
+        # Remove old person IDs
+        for pid in list(self.history.keys()):
+            if pid not in current_ids:
+                del self.history[pid]
+
+        # Update history for current persons
+        for pid, pose in poses.items():
+            if pid not in self.history:
+                self.history[pid] = deque(maxlen=self.history_size)
+            self.history[pid].append(pose.keypoints)
+
+    def _get_point(self, keypoints: List[List[float]], idx: int) -> tuple[float, float, float] | None:
+        """Get keypoint coordinates and confidence"""
+        if idx >= len(keypoints):
+            return None
+        x, y, conf = keypoints[idx]
+        if conf < 0.3:  # Minimum confidence threshold
+            return None
+        return x, y, conf
+
+    def _calculate_movement(self, history: deque, indices: List[int]) -> float:
+        """
+        Calculate movement for specific keypoints
+        Returns cumulative distance traveled normalized by number of frames
+        """
+        if len(history) < 2:
+            return 0.0
+
+        total_movement = 0.0
+        valid_frames = 0
+
+        for i in range(1, len(history)):
+            prev_kps = history[i-1]
+            curr_kps = history[i]
+
+            frame_movement = 0.0
+            valid_points = 0
+
+            for idx in indices:
+                prev_pt = self._get_point(prev_kps, idx)
+                curr_pt = self._get_point(curr_kps, idx)
+
+                if prev_pt and curr_pt:
+                    dx = curr_pt[0] - prev_pt[0]
+                    dy = curr_pt[1] - prev_pt[1]
+                    frame_movement += np.sqrt(dx*dx + dy*dy)
+                    valid_points += 1
+
+            if valid_points > 0:
+                total_movement += frame_movement / valid_points
+                valid_frames += 1
+
+        if valid_frames == 0:
+            return 0.0
+
+        return total_movement / valid_frames
+
+    def get_metrics(self) -> Dict[str, float]:
+        """
+        Calculate aggregate movement metrics across all tracked persons
+        Returns: {total_movement, arm_movement, leg_movement, head_movement}
+        """
+        if not self.history:
+            return {
+                "total_movement": 0.0,
+                "arm_movement": 0.0,
+                "leg_movement": 0.0,
+                "head_movement": 0.0,
+            }
+
+        total_movements = []
+        arm_movements = []
+        leg_movements = []
+        head_movements = []
+
+        for pid, history in self.history.items():
+            if len(history) < 2:
+                continue
+
+            # Define body part indices
+            arm_indices = [self.LEFT_SHOULDER, self.RIGHT_SHOULDER,
+                          self.LEFT_ELBOW, self.RIGHT_ELBOW,
+                          self.LEFT_WRIST, self.RIGHT_WRIST]
+
+            leg_indices = [self.LEFT_HIP, self.RIGHT_HIP,
+                          self.LEFT_KNEE, self.RIGHT_KNEE,
+                          self.LEFT_ANKLE, self.RIGHT_ANKLE]
+
+            head_indices = [self.NOSE]
+
+            all_indices = list(range(17))  # All YOLO pose keypoints
+
+            # Calculate movements
+            total_movements.append(self._calculate_movement(history, all_indices))
+            arm_movements.append(self._calculate_movement(history, arm_indices))
+            leg_movements.append(self._calculate_movement(history, leg_indices))
+            head_movements.append(self._calculate_movement(history, head_indices))
+
+        # Return average across all persons (or 0 if no valid data)
+        return {
+            "total_movement": np.mean(total_movements) if total_movements else 0.0,
+            "arm_movement": np.mean(arm_movements) if arm_movements else 0.0,
+            "leg_movement": np.mean(leg_movements) if leg_movements else 0.0,
+            "head_movement": np.mean(head_movements) if head_movements else 0.0,
+        }
+
+
 class CosmicSkeletonStandalone:
     """Standalone cosmic skeleton visualizer with integrated YOLO detection"""
 
     def __init__(self, video_source: int = 0, web_port: int = 8094,
-                 model: str = "yolov8n-pose.pt", imgsz: int = 416):
+                 model: str = "yolov8n-pose.pt", imgsz: int = 416,
+                 osc_host: str = "127.0.0.1", osc_port: int = 57120,
+                 osc_interval: float = 10.0):
         self.video_source = video_source
         self.web_port = web_port
         self.imgsz = imgsz
+        self.osc_host = osc_host
+        self.osc_port = osc_port
+        self.osc_interval = osc_interval
 
         # YOLO model
         print(f"Loading YOLO model: {model}")
@@ -56,6 +194,12 @@ class CosmicSkeletonStandalone:
         # Pose data storage
         self.poses: Dict[int, PoseData] = {}
         self.lock = threading.Lock()
+
+        # Movement tracking
+        self.movement_tracker = MovementTracker(history_size=30)
+
+        # OSC client
+        self.osc_client = udp_client.SimpleUDPClient(osc_host, osc_port)
 
         # WebSocket clients
         self.clients: Set[WebSocket] = set()
@@ -145,6 +289,28 @@ class CosmicSkeletonStandalone:
         for ws in disconnected:
             self.clients.discard(ws)
 
+    def _send_osc_metrics(self):
+        """Send dance movement metrics via OSC periodically"""
+        while self.running:
+            time.sleep(self.osc_interval)
+
+            # Get current metrics
+            metrics = self.movement_tracker.get_metrics()
+
+            # Send OSC messages
+            try:
+                self.osc_client.send_message("/dance/total_movement", metrics["total_movement"])
+                self.osc_client.send_message("/dance/arm_movement", metrics["arm_movement"])
+                self.osc_client.send_message("/dance/leg_movement", metrics["leg_movement"])
+                self.osc_client.send_message("/dance/head_movement", metrics["head_movement"])
+
+                print(f"🎵 OSC sent: total={metrics['total_movement']:.4f}, "
+                      f"arm={metrics['arm_movement']:.4f}, "
+                      f"leg={metrics['leg_movement']:.4f}, "
+                      f"head={metrics['head_movement']:.4f}")
+            except Exception as e:
+                print(f"❌ OSC send error: {e}")
+
     def _process_video(self):
         """Process video with YOLO detection in background thread"""
         cap = cv2.VideoCapture(self.video_source)
@@ -224,6 +390,9 @@ class CosmicSkeletonStandalone:
                 for pid in stale_ids:
                     del self.poses[pid]
 
+                # Update movement tracker
+                self.movement_tracker.update(self.poses)
+
             # Broadcast to clients
             if self.loop and self.clients:
                 current_time = time.time()
@@ -246,6 +415,10 @@ class CosmicSkeletonStandalone:
         video_thread = threading.Thread(target=self._process_video, daemon=True)
         video_thread.start()
 
+        # Start OSC metrics sender thread
+        osc_thread = threading.Thread(target=self._send_osc_metrics, daemon=True)
+        osc_thread.start()
+
         # Run FastAPI with uvicorn
         config = uvicorn.Config(
             self.app,
@@ -264,6 +437,7 @@ class CosmicSkeletonStandalone:
         print(f"   Web UI: http://0.0.0.0:{self.web_port}")
         print(f"   Video source: {self.video_source}")
         print(f"   Model: yolov8n-pose.pt (imgsz={self.imgsz})")
+        print(f"   OSC: {self.osc_host}:{self.osc_port} (interval: {self.osc_interval}s)")
 
         try:
             loop.run_until_complete(server.serve())
@@ -280,6 +454,9 @@ def main():
     parser.add_argument("--source", type=int, default=0, help="Video source (default: 0 = webcam)")
     parser.add_argument("--model", default="yolov8n-pose.pt", help="YOLO model to use")
     parser.add_argument("--imgsz", type=int, default=416, help="Input image size (default: 416)")
+    parser.add_argument("--osc-host", default="127.0.0.1", help="OSC destination host (default: 127.0.0.1)")
+    parser.add_argument("--osc-port", type=int, default=57120, help="OSC destination port (default: 57120)")
+    parser.add_argument("--osc-interval", type=float, default=10.0, help="OSC send interval in seconds (default: 10.0)")
 
     args = parser.parse_args()
 
@@ -287,7 +464,10 @@ def main():
         video_source=args.source,
         web_port=args.port,
         model=args.model,
-        imgsz=args.imgsz
+        imgsz=args.imgsz,
+        osc_host=args.osc_host,
+        osc_port=args.osc_port,
+        osc_interval=args.osc_interval
     )
     visualizer.start()
 
