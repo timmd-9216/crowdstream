@@ -240,13 +240,27 @@ class DanceMovementDetector:
             )
 
             if results[0].keypoints is not None:
+                # Extract keypoints and IDs efficiently
                 keypoints = results[0].keypoints.data.cpu().numpy()
+
+                # DEBUG: Check what YOLO detected
+                num_keypoints = len(keypoints)
+                num_boxes = len(results[0].boxes) if results[0].boxes is not None else 0
 
                 # Get tracking IDs if available
                 if results[0].boxes.id is not None:
                     track_ids = results[0].boxes.id.cpu().numpy().astype(int)
+                    num_tracked = len(track_ids)
+
+                    # CRITICAL: Verify alignment between boxes and keypoints
+                    if num_tracked != num_keypoints:
+                        print(f"⚠️ Mismatch: {num_tracked} tracked IDs but {num_keypoints} keypoints! Using sequential IDs.")
+                        track_ids = np.arange(num_keypoints, dtype=int)
                 else:
-                    track_ids = list(range(len(keypoints)))
+                    # Generate sequential IDs for untracked detections
+                    track_ids = np.arange(num_keypoints, dtype=int)
+                    if num_keypoints > 0:
+                        print(f"⚠️ Tracking failed: {num_keypoints} people detected but no IDs assigned")
 
                 # Update tracker with new poses
                 active_ids = set()
@@ -257,6 +271,13 @@ class DanceMovementDetector:
                 # Send keypoint data for skeleton visualization
                 self._send_keypoint_data(track_ids, keypoints, w, h)
 
+                # Send person count immediately with keypoints (critical for visualizers)
+                self._send_person_count(len(active_ids))
+
+                # DEBUG: Log detection info every 30 frames
+                if frame_count % 30 == 0:
+                    print(f"[DEBUG] Frame {frame_count}: {len(active_ids)} people, IDs: {sorted(active_ids)}, keypoints shape: {keypoints.shape}")
+
                 # Cleanup old tracks
                 self.tracker.cleanup_old_tracks(active_ids)
 
@@ -266,10 +287,15 @@ class DanceMovementDetector:
                     self.last_message_time = current_time
 
             # Display results if enabled
+            # NOTE: Disable on headless Raspberry Pi to save ~30% CPU
             if self.config.get('show_video', True):
                 annotated_frame = results[0].plot()
                 cv2.imshow('Dance Movement Detector', annotated_frame)
 
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            else:
+                # Still check for 'q' even without display (for SSH sessions with X forwarding)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
@@ -320,18 +346,24 @@ class DanceMovementDetector:
         """Send raw keypoint data for skeleton visualization"""
         base_address = self.config.get('osc_base_address', '/dance')
 
+        # Pre-calculate inverse dimensions to avoid repeated division (faster)
+        inv_width = 1.0 / frame_width
+        inv_height = 1.0 / frame_height
+
+        # DEBUG: Verify we're iterating over all people
+        num_people = len(track_ids)
+        if self.config.get('debug_osc', False) and num_people > 1:
+            print(f"[OSC] Sending keypoints for {num_people} people: IDs {track_ids.tolist()}")
+
         # Send keypoints for each person in BOTH formats for compatibility
         for person_id, kps in zip(track_ids, keypoints):
             # Normalize keypoints to 0-1 range based on frame dimensions
-            normalized_kps = []
-
-            for kp in kps:
-                # kp is [x, y, confidence]
-                normalized_kps.extend([
-                    float(kp[0] / frame_width),   # Normalize x
-                    float(kp[1] / frame_height),  # Normalize y
-                    float(kp[2])                   # Keep confidence as is
-                ])
+            # Use list comprehension for ~2x speed vs extend in loop
+            normalized_kps = [
+                val
+                for kp in kps
+                for val in (float(kp[0] * inv_width), float(kp[1] * inv_height), float(kp[2]))
+            ]
 
             # Send to all OSC clients in BOTH formats
             for client in self.osc_clients:
@@ -347,9 +379,18 @@ class DanceMovementDetector:
                     old_format_kps = [int(person_id)] + normalized_kps
                     client.send_message("/pose/keypoints", old_format_kps)
 
-                except Exception as e:
+                except Exception:
                     # Silently continue if visualizer is not running
                     pass
+
+    def _send_person_count(self, count: int):
+        """Send person count immediately (called every frame for visualizers)"""
+        base_address = self.config.get('osc_base_address', '/dance')
+        for client in self.osc_clients:
+            try:
+                client.send_message(f"{base_address}/person_count", int(count))
+            except Exception:
+                pass
 
     def _send_osc_messages(self, stats: MovementStats):
         """Send movement statistics via OSC to all destinations"""

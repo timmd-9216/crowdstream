@@ -207,15 +207,16 @@ sleep 2
 # Start Detector (only if not standalone)
 if [ "$IS_STANDALONE" = false ]; then
     echo "Starting Movement Detector..."
-    cd dance_movement_detector
+    pushd "$ROOT/dance_movement_detector" >/dev/null
+    DETECTOR_CFG="${DETECTOR_CFG:-config/raspberry_pi_optimized.json}"
     if [ -d "venv" ]; then
-        DISPLAY=:0 venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/raspberry_pi_optimized.json > ../logs/detector.log 2>&1 &
+        DISPLAY=:0 venv/bin/python3 src/dance_movement_detector.py --config "$DETECTOR_CFG" > "$LOG_DIR/detector.log" 2>&1 &
     else
-        DISPLAY=:0 python3 src/dance_movement_detector.py --config config/raspberry_pi_optimized.json > ../logs/detector.log 2>&1 &
+        DISPLAY=:0 python3 src/dance_movement_detector.py --config "$DETECTOR_CFG" > "$LOG_DIR/detector.log" 2>&1 &
     fi
     DETECTOR_PID=$!
+    popd >/dev/null
     echo "  Detector started (PID: $DETECTOR_PID)"
-    cd ..
     sleep 2
 else
     echo "⏭️  Skipping external detector (visualizer has built-in YOLO)"
