@@ -118,7 +118,7 @@
     /* Hero section */
     .hero {
       text-align: center;
-      padding: 10px 0 60px;
+      padding: 10px 0 30px;
     }
 
     .hero-text {
@@ -226,7 +226,7 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 30px;
-      margin-top: 10px;
+      margin-top: 0px;
     }
 
     .feature-card {
@@ -249,10 +249,31 @@
       margin-bottom: 20px;
     }
 
+    .feature-icon img {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 2px solid rgba(138, 43, 226, 0.6);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+      object-fit: cover;
+      display: block;
+    }
+
     .feature-card h3 {
       font-size: 1.5rem;
       margin-bottom: 15px;
       color: #667eea;
+    }
+
+    .feature-card h3 a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .features-grid a {
+      text-decoration: none;
+      color: inherit;
+      display: block;
     }
 
     .feature-card p {
@@ -371,10 +392,6 @@
         the tempo, that decides without consciously deciding, that writes the sonic narrative through its own kinetic
         energy.
       </p>
-      <div class="hero-diagrams">
-        <img class="diagram" src="assets/crowdstream_system_diagram.png" alt="Crowdstream System Diagram">
-        <img class="diagram2" src="assets/cartoon_diagram.png" alt="Crowdstream Flow Diagram">
-      </div>
     </section>
 
     <div class="features-grid">
@@ -405,8 +422,39 @@
         complemented by a computer vision engine that captures the audience’s movement and dynamics, synthesizing
         signals that actively drive the composition and performance.
       </p>
-      <div class="sensing-images">
-        <img src="assets/cosmic_skeleton.png" alt="Cosmic Skeleton Visualization">
+      <div class="hero-diagrams">
+          <img class="diagram" src="assets/crowdstream_system_diagram.png" alt="Crowdstream System Diagram">
+          <img class="diagram2" src="assets/cartoon_diagram.png" alt="Crowdstream Flow Diagram">
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Team Members</h2>
+      <div class="features-grid">
+        <a href="https://github.com/hordiales" target="_blank" rel="noopener noreferrer">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <img src="https://github.com/hordiales.png" alt="Avatar de Hernán Ordiales">
+          </div>
+          <h3>Hernán Ordiales</h3>
+        </div>
+        </a>
+        <a href="https://github.com/xavierign" target="_blank" rel="noopener noreferrer">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <img src="https://github.com/xavierign.png" alt="Avatar de Xavier Gonzalez">
+          </div>
+          <h3>Xavier Gonzalez</h3>
+        </div>
+        </a>
+        <a href="https://github.com/JuanCruzC97" target="_blank" rel="noopener noreferrer">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <img src="https://github.com/JuanCruzC97.png" alt="Avatar de Juan Cruz">
+          </div>
+            <h3>Juan Cruz Camacho</h3>
+        </div>
+        </a>
       </div>
     </section>
 
@@ -420,6 +468,7 @@
         time.
       </p>
       <div class="sensing-images">
+        <img src="assets/cosmic_skeleton.png" alt="Cosmic Skeleton Visualization">
         <img src="assets/signal_plot.png" alt="Energy Signal Visualization">
       </div>
     </section>
@@ -432,6 +481,9 @@
         sonic landscapes that emerge from the crowd itself, blurring the boundaries between performer and audience and
         turning participation into a central compositional force.
       </p>
+      <div class="sensing-images">
+        <img src="assets/audio_diagram.jpg" alt="Audio Diagram">
+      </div>
     </section>
 
     <section class="section">
