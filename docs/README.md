@@ -1,130 +1,199 @@
-# crowdstream
+# Music Mixing Engine 🎵
 
-![Dashboard example 1](./dance_dashboard_alt/dance_dashboard_example_1.png)
-![Dashboard example 2](./dance_dashboard_alt/dance_dashboard_example_2.png)
+A **real-time** music mixing engine that combines stems from different songs with smart memory management.
 
-## Ver imagen del detector
+***
+Demo: Livecoding session, mixing stems from different songs:
+https://youtu.be/1cXhiNixB_o
+***
 
-Para ver la ventana del detector con la cámara en vivo mostrando las detecciones YOLO y el esqueleto:
+Check the full [CrowdStream](https://timmd-9216.github.io/crowdstream/) project for another experimental uses and details.
 
-1. Editar el archivo de configuración: `dance_movement_detector/config/multi_destination.json`
-2. Cambiar `"show_video": false` a `"show_video": true` (línea 33)
-3. Reiniciar los servicios:
-   ```bash
-   ./kill-all-services.sh
-   ./start-all-services.sh --visualizer blur_skeleton
-   ```
 
-Esto abrirá una ventana OpenCV mostrando:
-- Video de la cámara en tiempo real
-- Detecciones YOLO sobre las personas
-- Esqueleto dibujado con keypoints
-- Valores de movimiento (cabeza, brazos, piernas)
+## Features Added:
 
-**Nota:** Si obtienes el error `RuntimeError: Cannot open video source: 0`, verifica:
-- La cámara no esté en uso por otra aplicación
-- Tengas permisos para acceder a la cámara
-- El índice de cámara sea correcto (prueba `"video_source": 1` si tienes múltiples cámaras)
+  1. Beat Quantization System
+    - Master timeline with global beat tracking
+    - Quantized stem loading waits for next beat boundary
+    - Configurable resolution: 1, 2, 4, or 8 beats
+  2. Instant Playback Methods
+    - instant.<stem> <song> - immediate playback with looping
+    - sample.<stem> <song> - one-shot samples without looping
+    - sync on/off - enable/disable quantization
+    - quantize <1|2|4|8> - set resolution
+    - sync status - show current sync state
+  3. Smart Timing Logic
+    - Default: beat-quantized loading for tight mixes
+    - Override: instant modes for manual timing control
+    - Threading-based delayed execution for perfect timing
 
-## Instalación
+  How It Works:
 
-### Opción 1: Instalación global del proyecto
+  - Quantized Mode (Default): When you load a stem with a.bass 2, it calculates
+  the delay until the next beat boundary and schedules playback
+  - Instant Mode: Commands like instant.bass 2 bypass timing and play immediately
+  - Sample Mode: Commands like sample.vocals 1 fire one-shot sounds instantly
+  without looping
 
-Instalar los requerimientos del proyecto.
+  The system provides professional DJ-style synchronization while maintaining the
+  flexibility for creative timing control.
 
-```bash
-pip install -r requirements.txt
+---
+## Features
+
+- **Real-Time Audio Mixing**: Live stem playback via SuperCollider audio server
+- **Smart Memory Loading**: Only loads stems when playing (optimized for 16GB RAM)
+- **Individual Stem Control**: Mix bass from one song with drums from another
+- **Section-Based Playback**: Play specific sections (verse, chorus, bridge, etc.)
+- **High-Quality Audio**: 44.1kHz matching, no resampling degradation
+- **OSC Control**: External control via OSC messages
+
+
+### 🎛️ Mixing Capabilities
+- **Stem Separation**: Works with bass, drums, vocals, piano, and other stems
+- **Song Structure Analysis**: Understands verse, chorus, bridge, intro, outro sections  
+- **Intelligent Stem Selection**: Different strategies per mixing theme
+- **Time-stretching Detection**: Identifies when pitch/tempo adjustment needed
+
+
+## File Structure
+
+```
+├── stems/                                    # Individual song stem directories
+│   ├── 01-01 Zjerm.../
+│   │   ├── bass.wav
+│   │   ├── drums.wav
+│   │   ├── vocals.wav
+│   │   ├── piano.wav
+│   │   └── other.wav
+│   └── ...
+├── song-structures/                          # Song metadata and structure (songs)
+│   ├── 01-01 ....json                 # BPM, beats, segments
+│   ├── 01-11  ....json    
+│   └── ...
+├── 🧠 stem_mixer_smart.py                  # ✅ SMART LOADING REAL-TIME MIXER
+├── 🐍 audio_server.py                      # ✅ PYTHON AUDIO ENGINE
+├── 🚀 start_python_mixer.sh                # ✅ ONE-CLICK PYTHON MIXER LAUNCHER
+├── 📋 config_loader.py                     # Configuration management
+├── 🔧 mixer_config.json                    # Mixer settings
+
 ```
 
-Instalar el proyecto en modo desarrollo.
+**IMPORTANT NOTE:** for a reliable stems separation use demucs/spleeter and for song structure [allinone](https://github.com/hordiales/all-in-one) (which also does stems split using demucs)
 
+## Usage
+
+### 🎛️ **Real-Time Smart Mixer (Recommended)**
+
+**🚀 One-Click Python Mixer (Easiest):**
 ```bash
-pip install -e .
+./start_python_mixer.sh
+```
+*Automatically starts both Python audio server and stem mixer*
+
+**Live Mixing Commands:**
+```bash
+🎛️🧠 > songs                    # List available songs
+🎛️🧠 > a.bass 2                # Load bass from song 2 to deck A
+🎛️🧠 > b.vocals.chorus 5       # Load vocals from chorus of song 5 to deck B
+🎛️🧠 > bpm 128                 # Set BPM to 128
+🎛️🧠 > cross 0.5               # 50/50 crossfade between decks
+🎛️🧠 > bass 0.8                # Set bass volume to 80%
+🎛️🧠 > random                  # Generate random creative mix
 ```
 
-### Opción 2: Instalación de servicios individuales (Recomendado)
+## Technical Details
 
-Crear entornos virtuales para todos los servicios:
-
-```bash
-./setup-all-venvs.sh
+### Song Structure Format
+```json
+{
+  "bpm": 140,
+  "beats": [0.82, 1.24, 1.7, ...],
+  "downbeats": [1.7, 3.44, 5.19, ...],
+  "segments": [
+    {"start": 0.82, "end": 15.62, "label": "intro"},
+    {"start": 15.62, "end": 29.53, "label": "verse"},
+    ...
+  ]
+}
 ```
 
-O instalar servicios individuales:
-
-```bash
-cd dance_dashboard_alt && ./install.sh
-cd cosmic_skeleton && ./install.sh
-cd cosmic_journey && ./install.sh
-cd space_visualizer && ./install.sh
-cd blur_skeleton_visualizer && ./install.sh
-cd dance_movement_detector && ./install.sh
+### Remix Plan Output
+```json
+{
+  "theme": "energetic",
+  "base_song": "Hallucination",
+  "base_bpm": 140,
+  "base_key": "D",
+  "structure": ["intro", "verse", "chorus", ...],
+  "sections": {
+    "00_intro": {
+      "stems": {
+        "bass": {"song": "...", "bpm": 143, "pitch_shift": 0.98}
+      }
+    }
+  }
+}
 ```
 
-## Ejecutar servicios
+## Advanced Features
 
-### Iniciar todos los servicios
+### 🧠 **Smart Loading System**
+- **Memory Efficient**: Only loads stems when actually playing
+- **Automatic Cleanup**: Frees unused buffers automatically
+- **Buffer Management**: Smart allocation and deallocation
 
-El dashboard se inicia por defecto. Debes elegir un visualizador:
+### 🎛️ **Real-Time Audio Engine**
+- **High-Quality**: 44.1kHz native, no resampling degradation  
+- **Low Latency**: 256-sample blocks for responsive control
+- **Individual Control**: Each stem controllable independently
+- **Section Playback**: Jump to specific song sections (verse, chorus, etc.)
 
+### 🎵 **Musical Intelligence**
+- **BPM Sync**: Automatic tempo matching across stems
+- **Key Detection**: Eurovision-specific key mapping
+- **Structure Analysis**: Understands song sections and timing
+- **Harmonic Mixing**: Camelot Wheel compatibility
+
+### 📡 **OSC Integration**
+- **External Control**: Full OSC message support
+- **Real-Time**: Instant parameter changes
+- **Automation Ready**: Perfect for live performance
+- **Protocol Documentation**: Complete OSC reference available
+
+## Requirements
+
+** Python Audio Engine (Recommended)**
+- **Python 3.7+** with dependencies:
+  - `pythonosc` - OSC communication
+  - `soundfile` - Audio file reading
+  - `pyaudio` - Real-time audio playback
+  - `numpy` - Audio processing
+
+**Common Requirements:**
+- **Audio Files**: WAV format, 44.1kHz stereo preferred
+- **Memory**: 16GB+ RAM recommended
+- **Song Structures**: JSON metadata files
+
+### 📦 **Installation**
+
+**Python Audio Engine Setup (Recommended)**
 ```bash
-# Dashboard + visualizador (recomendado)
-./start-all-services.sh --visualizer cosmic_skeleton
-
-# Sin dashboard
-./start-all-services.sh --visualizer cosmic_skeleton --no-dashboard
-
-# Otros visualizadores disponibles
-./start-all-services.sh --visualizer cosmic_journey
-./start-all-services.sh --visualizer space_visualizer
-./start-all-services.sh --visualizer blur_skeleton
+# Install Python dependencies:
+pip install python-osc soundfile pyaudio numpy
 ```
+<<<<<<< HEAD
 
-### Opciones disponibles
+## Contributing
 
-- `--visualizer`: Selecciona el visualizador (requerido)
-  - `cosmic_skeleton`: Visualizador de esqueletos cósmico
-  - `cosmic_journey`: Visualizador cosmic journey
-  - `space_visualizer`: Visualizador espacial
-  - `blur_skeleton`: **Autónomo** - Video borroso con líneas de esqueleto intensas (puerto 8092)
-- `--no-dashboard`: Omite iniciar el dashboard (dashboard se inicia por defecto)
+The engine is designed to be extensible:
+- Add new compatibility algorithms
+- Implement additional mixing themes
+- Extend key detection systems
+- Add support for other audio formats
 
-### Nota sobre blur_skeleton
+## License
 
-**Blur es autónomo y no requiere el detector**. Hace su propia detección YOLO y puede funcionar completamente solo:
-
-```bash
-cd blur_skeleton_visualizer
-./install.sh
-./start_blur.sh
-```
-
-Ver [blur_skeleton_visualizer/ARCHITECTURE.md](blur_skeleton_visualizer/ARCHITECTURE.md) para más detalles sobre su arquitectura.
-
-### Detener servicios
-
-```bash
-./kill-all-services.sh
-```
-
-### Ver logs
-
-```bash
-tail -f logs/detector.log
-tail -f logs/skeleton.log      # o cosmic.log, space.log, blur.log
-tail -f logs/dashboard_alt.log  # si usas --dashboard
-```
-
-### Notas importantes
-
-- El detector no muestra ventana de video cuando se ejecuta con el script (configurado con `show_video: false` para reducir recursos)
-- El visualizador `blur_skeleton` captura video directamente y lo procesa con efecto blur + overlay de esqueleto
-- Los keypoints son enviados vía OSC desde el detector a todos los visualizadores configurados
-
-## Variables de entorno
-
-Setear manualmente o configurar archivo .env en el path de ejecución
-
-Por ejemplo:
-    SPOTIPY_CLIENT_ID=""
-    SPOTIPY_CLIENT_SECRET=""
+This project demonstrates advanced music mixing concepts using Eurovision 2025 data for educational and research purposes.
+=======
+>>>>>>> 0bae44770235265b872caacf479960839d98e0a6

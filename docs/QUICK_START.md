@@ -1,287 +1,182 @@
-# Quick Start Guide
+# 🎛️ OSC Mixer Client v2 - Quick Start
 
-Guía rápida para iniciar y gestionar todos los servicios del sistema de detección de movimiento de bailarines.
+Script que envía **mensajes OSC reales** directamente al `audio_server.py` para crear mezclas automáticas.
 
-## Scripts Disponibles
+## ⚡ Inicio Rápido
 
-### 🟢 Iniciar Todos los Servicios
-```bash
-./start-all-services.sh
-```
-Inicia detector, dashboard y visualizador automáticamente con la configuración correcta de puertos.
-
-### 🔴 Detener Todos los Servicios
-```bash
-./kill-all-services.sh
-```
-Detiene todos los servicios corriendo (detector, dashboard, visualizador, controlador).
-
-### 📋 Ver Logs
-```bash
-tail -f logs/dashboard.log
-tail -f logs/visualizer.log
-tail -f logs/detector.log
-```
-
-## Configuración Inicial
-
-### Opción 1: Script Automatizado (RECOMENDADO)
-
-**Inicio rápido en 1 comando:**
-```bash
-./start-all-services.sh
-```
-
-Esto automáticamente:
-- Detiene servicios previos
-- Inicia Dashboard en puerto OSC 5005, web 8081
-- Inicia Visualizer en puerto OSC 5006, web 8090
-- Inicia Detector enviando a ambos puertos
-- Crea logs en `logs/`
-
-**Abrir interfaces:**
-- Dashboard: http://localhost:8081
-- Visualizer: http://localhost:8090
-
-**Para detener:**
-```bash
-./kill-all-services.sh
-```
-
-### Opción 2: Inicio Manual (3 terminales)
-
-**Terminal 1 - Dashboard**
-```bash
-cd dance_dashboard
-./start.sh --web-port 8081 --osc-port 5005
-```
-Abre: http://localhost:8081
-
-**Terminal 2 - Visualizador Espacial**
-```bash
-cd space_visualizer
-./start.sh --osc-port 5006 --web-port 8090
-```
-Abre: http://localhost:8090
-
-**Terminal 3 - Detector de Movimiento**
-```bash
-cd dance_movement_detector
-python3 src/dance_movement_detector.py --config config/multi_destination.json
-```
-
-### Opción 2: Controlador de Servicios (1 terminal)
-
-**Iniciar el controlador:**
-```bash
-cd service_controller
-./start.sh
-```
-Abre: http://localhost:8000
-
-Luego desde el navegador:
-1. Click en "▶️ Iniciar Todos"
-2. Espera que todos estén en estado "Ejecutando"
-3. Abre las otras interfaces:
-   - Dashboard: http://localhost:8080
-   - Visualizer: http://localhost:8090
-
-**Nota:** El controlador necesita configuración adicional para multi-destino OSC.
-
-## Mapeo de Puertos
-
-| Servicio | Puerto OSC | Puerto Web |
-|----------|-----------|------------|
-| Dashboard | 5005 | 8081 |
-| Visualizer | 5006 | 8090 |
-| Controller | - | 8000 |
-| Detector | Envía a 5005 + 5006 | - |
-
-## Configuración de Mapeo Visual
-
-El visualizador soporta mapeo configurable de movimientos a efectos:
-
-**Ver configuración actual:**
-```bash
-cat space_visualizer/config/mapping.json
-```
-
-**Usar mapeo personalizado:**
-```bash
-cd space_visualizer
-python3 src/visualizer_server.py \
-  --osc-port 5006 \
-  --mapping config/mi_mapeo.json
-```
-
-Ver [MAPPING_CONFIG.md](MAPPING_CONFIG.md) para detalles completos.
-
-## Mapeo Actual (Default)
-
-- 🙌 **Brazos** → Velocidad de viaje espacial
-- 🗣️ **Cabeza** → Tamaño de estrellas
-- 🦵 **Piernas** → Rotación de cámara
-- 💃 **Movimiento Total** → Intensidad de color y warp drive
-- 👥 **Personas** → Densidad de estrellas
-
-## Troubleshooting
-
-### Error "Address already in use"
+### 1. Iniciar Audio Server
 
 ```bash
-# Detener todos los servicios
-./kill-all-services.sh
-
-# Ver qué está usando los puertos
-lsof -i:5005
-lsof -i:5006
-lsof -i:8080
-lsof -i:8090
+cd src/audio-engine
+python audio_server.py
 ```
 
-### El detector no envía datos
+Espera a ver: `🎛️💾 PYTHON AUDIO SERVER READY 💾🎛️`
 
-**Verificar configuración multi-destino:**
+### 2. Ejecutar Mezclas
+
+En otra terminal:
+
 ```bash
-cat dance_movement_detector/config/multi_destination.json
+cd src/audio-engine
+
+# Listar canciones
+./run_mixer.sh list
+
+# Demo completo
+./run_mixer.sh demo
+
+# Mix básico (canciones 0 y 1 a 135 BPM)
+./run_mixer.sh mix 0 1 135
+
+# Mashup de 4 canciones a 140 BPM
+./run_mixer.sh mashup 4 140
+
+# Build progresivo de canción 2 a 120 BPM
+./run_mixer.sh build 2 120
 ```
 
-Debe incluir:
+## 🎵 Mensajes OSC Enviados
+
+El script envía estos mensajes OSC reales al audio_server.py (puerto 57120):
+
+| Acción | Mensaje OSC | Parámetros |
+|--------|-------------|------------|
+| Cargar stem | `/load_buffer` | `[buffer_id, file_path, label]` |
+| Reproducir | `/play_stem` | `[buffer_id, rate, volume, loop, start_pos]` |
+| Crossfade | `/crossfade_levels` | `[deck_a_vol, deck_b_vol]` |
+| Volumen | `/stem_volume` | `[buffer_id, volume]` |
+| Parar | `/stop_stem` | `[buffer_id]` |
+| Limpiar | `/mixer_cleanup` | `[]` |
+
+## 🎛️ Patrones de Mezcla
+
+### 1. Basic Mix
+Mezcla completa entre 2 canciones con crossfade gradual:
+- Carga canción 1 en Deck A (bass, drums, vocals)
+- Carga canción 2 en Deck B (bass, drums, vocals)
+- Crossfade progresivo de A a B
+
+### 2. Mashup
+Combina stems aleatorios de múltiples canciones:
+- Selecciona N canciones al azar
+- Escoge un stem diferente de cada una
+- Los carga todos en Deck A
+
+### 3. Progressive Build
+Construcción progresiva añadiendo stems gradualmente:
+- Empieza solo con bass (4 seg)
+- Añade drums (4 seg)
+- Añade vocals (4 seg)
+- Añade piano y otros elementos
+
+## 🔧 Configuración
+
+Edita `osc_client_config.json`:
+
 ```json
 {
-  "osc_destinations": [
-    {"host": "127.0.0.1", "port": 5005},
-    {"host": "127.0.0.1", "port": 5006}
-  ]
+  "paths": {
+    "stems_dir": "stems",
+    "structures_dir": "song-structures"
+  },
+  "osc": {
+    "host": "localhost",
+    "port": 57120
+  },
+  "mixing": {
+    "default_bpm": 128.0
+  }
 }
 ```
 
-### Dashboard o Visualizer no reciben datos
+## 📁 Estructura de Archivos
 
-1. Verifica que el detector esté corriendo
-2. Chequea que los puertos OSC coincidan
-3. Revisa logs del detector para ver si envía mensajes
-4. Verifica la conexión WebSocket (indicador en UI)
+```
+src/audio-engine/
+├── audio_server.py           # Servidor OSC (iniciar primero)
+├── osc_mixer_client_v2.py    # Cliente OSC con mensajes reales
+├── run_mixer.sh              # Script helper
+├── osc_client_config.json    # Configuración
+├── stems/                    # Canciones
+│   └── song_name/
+│       ├── bass.wav
+│       ├── drums.wav
+│       ├── vocals.wav
+│       ├── piano.wav
+│       └── other.wav
+└── song-structures/          # Estructuras JSON
+    └── song_name.json
+```
 
-### Problemas de rendimiento
+## 🎯 Ejemplo Completo
 
-**En sistemas lentos:**
-
-1. Reduce intervalo de mensajes:
 ```bash
-# En multi_destination.json
-"message_interval": 1.0  # Cambiar a 2.0 o 5.0
+# Terminal 1: Iniciar audio server
+cd src/audio-engine
+python audio_server.py
+
+# Terminal 2: Ejecutar mezclas
+cd src/audio-engine
+
+# Ver canciones disponibles
+./run_mixer.sh list
+
+# Crear mezcla entre Albania (0) y Armenia (1) a 130 BPM
+./run_mixer.sh mix 0 1 130
+
+# Escuchar el resultado por ~20 segundos...
+
+# Crear mashup de 3 canciones a 135 BPM
+./run_mixer.sh mashup 3 135
 ```
 
-2. Reduce número de estrellas:
+## 🔍 Verificar que Funciona
+
+Cuando ejecutas un comando, deberías ver:
+
+**En el cliente (run_mixer.sh):**
+```
+📥 Deck A [buf:1000]: bass from 01-01 Zjerm...
+▶️  Play: rate=1.024, vol=0.80, start=0.000
+📥 Deck A [buf:1001]: drums from 01-01 Zjerm...
+▶️  Play: rate=1.024, vol=0.80, start=0.000
+```
+
+**En el servidor (audio_server.py):**
+```
+📡 OSC RECEIVED: /load_buffer (1000, '/path/to/bass.wav', 'label')
+✅ Loaded label (8.5 MB)
+📡 OSC RECEIVED: /play_stem (1000, 1.024, 0.8, 1, 0.0)
+▶️  Playing buffer 1000, rate: 1.024
+```
+
+## 🆚 Diferencias con Versión Anterior
+
+| Característica | v1 (osc_mixer_client.py) | v2 (osc_mixer_client_v2.py) |
+|----------------|--------------------------|------------------------------|
+| Mensajes OSC | Solo documentados | **Enviados realmente** |
+| Puerto | 5005 (stem_mixer_smart) | 57120 (audio_server.py) |
+| Control | Via CLI commands | **Via OSC directo** |
+| Buffer IDs | N/A | Gestionados (1000-1099 A, 1100-1199 B) |
+| BPM matching | N/A | **Calculado automáticamente** |
+
+## ⚠️ Troubleshooting
+
+### "Connection refused"
+→ Asegúrate de que `audio_server.py` está corriendo
+
+### No se escucha sonido
+→ Verifica que `audio_server.py` muestra "Playing buffer..."
+→ Revisa volumen del sistema
+
+### "Invalid song ID"
+→ Ejecuta `./run_mixer.sh list` para ver IDs válidos
+
+### Puerto ocupado
+→ Verifica que no hay otro proceso en puerto 57120:
 ```bash
-# En mapping.json
-"particle_count": {
-  "max_output": 3000  # Reducir de 5000
-}
+lsof -i :57120
 ```
 
-## Comandos Útiles
-
-### Ver procesos corriendo
-```bash
-ps aux | grep -E "(dashboard|visualizer|detector|controller)" | grep -v grep
-```
-
-### Ver puertos en uso
-```bash
-lsof -i -P | grep -E "5005|5006|8000|8080|8081|8090" | grep LISTEN
-```
-
-### Matar un servicio específico
-```bash
-# Dashboard
-pkill -f dashboard_server.py
-
-# Visualizer
-pkill -f visualizer_server.py
-
-# Detector
-pkill -f dance_movement_detector.py
-
-# Controller
-pkill -f service_manager.py
-```
-
-### Ver logs en tiempo real
-```bash
-# Si corriste con start.sh, los logs están en la terminal
-# Para capturar logs:
-cd dance_movement_detector
-python3 src/dance_movement_detector.py --config config/multi_destination.json 2>&1 | tee detector.log
-```
-
-## Flujo de Datos
-
-```
-📹 Cámara
-    ↓
-🤖 Detector YOLO
-    ↓
-📡 OSC Messages
-    ├─→ 5005 → 📊 Dashboard (8081)
-    └─→ 5006 → 🌌 Visualizer (8090)
-```
-
-## Setup para Presentación
-
-### Configuración Recomendada
-
-1. **Una laptop/PC con GPU** (detector)
-2. **Raspberry Pi o segunda PC** (dashboard + visualizer)
-3. **Proyector/TV** conectado a RPi mostrando visualizer
-
-### Conexión de Red
-
-**En la laptop (detector):**
-```bash
-# Editar multi_destination.json
-{
-  "osc_destinations": [
-    {"host": "192.168.1.XXX", "port": 5005},  # IP de la RPi
-    {"host": "192.168.1.XXX", "port": 5006}
-  ]
-}
-```
-
-**En la Raspberry Pi:**
-```bash
-# Terminal 1
-./start.sh --osc-port 5005
-
-# Terminal 2
-cd ../space_visualizer
-./start.sh --osc-port 5006
-```
-
-## Personalización Rápida
-
-### Cambiar intervalo de mensajes
-```bash
-# Editar dance_movement_detector/config/multi_destination.json
-"message_interval": 1.0  # Segundos entre mensajes (default: 10)
-```
-
-### Cambiar mapeo de movimientos
-```bash
-# Editar space_visualizer/config/mapping.json
-# Ver MAPPING_CONFIG.md para ejemplos
-```
-
-### Cambiar colores/efectos
-```bash
-# Editar space_visualizer/static/js/space_visualizer.js
-# Líneas 89-99: Colores de estrellas
-# Líneas 128-142: Colores de nebulosas
-```
-
-## Recursos
-
-- [RASPBERRY_PI_SETUP.md](RASPBERRY_PI_SETUP.md) - Setup en Raspberry Pi
-- [MAPPING_CONFIG.md](MAPPING_CONFIG.md) - Configuración de mapeo visual
-- READMEs individuales en cada directorio de servicio
+¡Listo para mezclar! 🎵✨
