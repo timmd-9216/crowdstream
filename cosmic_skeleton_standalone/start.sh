@@ -16,7 +16,8 @@ fi
 # Default values
 PORT=8094
 SOURCE=0
-IMGSZ=416
+#IMGSZ=416
+IMGSZ=320
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do

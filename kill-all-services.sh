@@ -44,7 +44,7 @@ echo ""
 echo "=== Verifying Ports ==="
 
 # Check if ports are free and kill processes using them
-for port in 5005 5006 5007 5008 5009 8000 8080 8081 8082 8090 8091 8092; do
+for port in 5005 5006 5007 5008 5009 8000 8080 8081 8082 8090 8091 8092 8094; do
     pids=$(lsof -ti:$port 2>/dev/null)
     if [ ! -z "$pids" ]; then
         echo "⚠ Port $port still in use (PIDs: $pids)"
