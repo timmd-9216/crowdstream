@@ -8,12 +8,12 @@
   "conf_threshold": 0.3,
   "iou_threshold": 0.5,
   "max_det": 5,
-  "history_frames": 5,
+  "history_frames": 3,
 
   "_comment_camera": "Camera settings to reduce latency",
   "camera_width": 640,
   "camera_height": 480,
-  "camera_fps": 30,
+  "camera_fps": 25,
   "skip_frames": 2,
 
   "osc_destinations": [
