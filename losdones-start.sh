@@ -12,7 +12,7 @@ python --version
 sleep 1
 
 python audio_server.py --port 57120 &
-sleep 5
+sleep 8  # Wait for audio server to fully initialize (ALSA probing takes time)
 
 python mixer.py --preflight-only
 python mixer.py --host 0.0.0.0 --port 57120 &

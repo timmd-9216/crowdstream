@@ -17,7 +17,7 @@ import argparse
 import threading
 import time
 from pathlib import Path
-from typing import Dict, Optional, Any, Tuple
+from typing import Dict, Optional, Any, Tuple, Union
 
 import numpy as np
 import pyaudio
@@ -105,15 +105,88 @@ class _ThreeBand:
         return out
 
 
-# DISABLED: Optimized filters caused audio to stop working
-# Keeping code for future debugging
-#
-# class _ThreeBandOptimized:
-#     """Optimized 3-band filter using scipy.signal.lfilter (50-100x faster).
-#     Same algorithm as _ThreeBand but vectorized using scipy's C implementation.
-#     DISABLED: Caused silent audio output - needs debugging.
-#     """
-#     pass
+class _ThreeBandOptimized:
+    """Optimized 3-band filter using scipy.signal.lfilter (50-100x faster).
+    Same algorithm as _ThreeBand but vectorized using scipy's C implementation.
+
+    Low-pass: one-pole IIR filter y[n] = (1-a)*x[n] + a*y[n-1]
+    High-pass: one-pole IIR filter y[n] = a*(y[n-1] + x[n] - x[n-1])
+    Mid: residual = x - low - high
+    """
+
+    def __init__(self, sample_rate: int, low_hz: float = 200.0, high_hz: float = 2000.0):
+        if not SCIPY_AVAILABLE:
+            raise ImportError("scipy is required for optimized filters")
+
+        self.fs = float(sample_rate)
+
+        # One-pole coefficients
+        self._alp_low = np.exp(-2.0 * np.pi * low_hz / self.fs)
+        self._alp_high = np.exp(-2.0 * np.pi * high_hz / self.fs)
+
+        # Filter coefficients for scipy.signal.lfilter
+        # Low-pass: y[n] = (1-a)*x[n] + a*y[n-1]
+        #   -> b = [1-a], a = [1, -a]
+        self._b_lp = np.array([1.0 - self._alp_low], dtype=np.float32)
+        self._a_lp = np.array([1.0, -self._alp_low], dtype=np.float32)
+
+        # High-pass: y[n] = a*(y[n-1] + x[n] - x[n-1])
+        #   -> y[n] = a*x[n] - a*x[n-1] + a*y[n-1]
+        #   -> b = [a, -a], a = [1, -a]
+        self._b_hp = np.array([self._alp_high, -self._alp_high], dtype=np.float32)
+        self._a_hp = np.array([1.0, -self._alp_high], dtype=np.float32)
+
+        # Filter state per channel (zi format for lfilter)
+        # For a 1st order filter, zi has length 1
+        self._zi_lp_L = np.zeros(1, dtype=np.float32)
+        self._zi_lp_R = np.zeros(1, dtype=np.float32)
+        self._zi_hp_L = np.zeros(1, dtype=np.float32)
+        self._zi_hp_R = np.zeros(1, dtype=np.float32)
+
+        # User gains
+        self.low_gain = 1.0
+        self.mid_gain = 1.0
+        self.high_gain = 1.0
+
+    def set_gain(self, band: str, value: float) -> None:
+        b = (band or "").strip().lower()
+        v = float(value)
+        if b.startswith("lo"):
+            self.low_gain = v
+        elif b.startswith("mi"):
+            self.mid_gain = v
+        elif b.startswith("hi"):
+            self.high_gain = v
+        else:
+            raise ValueError(f"Unknown band '{band}' (expected 'low'|'mid'|'high')")
+
+    def process(self, x: np.ndarray) -> np.ndarray:
+        """Process audio using vectorized scipy.signal.lfilter (50-100x faster than Python loops)."""
+        if x.size == 0:
+            return x
+
+        # Process each channel separately
+        x_L = x[:, 0].astype(np.float32)
+        x_R = x[:, 1].astype(np.float32)
+
+        # Apply low-pass filter
+        lp_L, self._zi_lp_L = lfilter(self._b_lp, self._a_lp, x_L, zi=self._zi_lp_L)
+        lp_R, self._zi_lp_R = lfilter(self._b_lp, self._a_lp, x_R, zi=self._zi_lp_R)
+
+        # Apply high-pass filter
+        hp_L, self._zi_hp_L = lfilter(self._b_hp, self._a_hp, x_L, zi=self._zi_hp_L)
+        hp_R, self._zi_hp_R = lfilter(self._b_hp, self._a_hp, x_R, zi=self._zi_hp_R)
+
+        # Mid band is residual
+        mid_L = x_L - lp_L - hp_L
+        mid_R = x_R - lp_R - hp_R
+
+        # Apply gains and combine
+        out_L = self.low_gain * lp_L + self.mid_gain * mid_L + self.high_gain * hp_L
+        out_R = self.low_gain * lp_R + self.mid_gain * mid_R + self.high_gain * hp_R
+
+        # Stack back to stereo
+        return np.column_stack([out_L, out_R]).astype(np.float32)
 
 
 class TempoClock:
@@ -299,7 +372,8 @@ class PythonAudioServer:
     #   C: 2100–3099
     #   D: 3100–4099
 
-    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024, enable_filters: bool = False):
+    def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024,
+                 enable_filters: bool = False, use_optimized_filters: bool = False):
         self.osc_port = osc_port
         self.sample_rate = 44100
         self.chunk_size = chunk_size  # Default 1024 for Raspberry Pi stability
@@ -316,11 +390,20 @@ class PythonAudioServer:
         self.master_volume = 0.8
 
         # Per‑deck 3‑band tone filters (low/mid/high)
-        self._filters: Dict[str, _ThreeBand] = {
-            'A': _ThreeBand(self.sample_rate),
-            'B': _ThreeBand(self.sample_rate),
-            'C': _ThreeBand(self.sample_rate),
-            'D': _ThreeBand(self.sample_rate),
+        # Use optimized scipy version if requested and available
+        filter_class = _ThreeBand  # Default to Python version
+        if use_optimized_filters:
+            if SCIPY_AVAILABLE:
+                filter_class = _ThreeBandOptimized
+                print("🚀 Using optimized scipy filters (50-100x faster)")
+            else:
+                print("⚠️  scipy not available, falling back to standard filters")
+
+        self._filters: Dict[str, Union[_ThreeBand, _ThreeBandOptimized]] = {
+            'A': filter_class(self.sample_rate),
+            'B': filter_class(self.sample_rate),
+            'C': filter_class(self.sample_rate),
+            'D': filter_class(self.sample_rate),
         }
 
         self.clock = TempoClock()
@@ -1127,6 +1210,7 @@ def main() -> None:
     parser.add_argument("--device", type=int, help="Audio device ID")
     parser.add_argument("--buffer-size", type=int, default=1024, help="Audio buffer size in frames (default: 1024 for Raspberry Pi). Lower=less latency, higher=more stable. Try 512/1024/2048.")
     parser.add_argument("--enable-filters", action="store_true", help="Enable 3-band EQ filters (CPU-intensive, disabled by default on Raspberry Pi)")
+    parser.add_argument("--optimized-filters", action="store_true", help="Use scipy-based optimized filters (50-100x faster, requires scipy)")
     parser.add_argument("--bpm", type=float, default=120.0, help="Initial tempo in BPM")
     parser.add_argument("--a", type=str, help="Path to audio file for Deck A (buffer 100)")
     parser.add_argument("--b", type=str, help="Path to audio file for Deck B (buffer 1100)")
@@ -1153,7 +1237,8 @@ def main() -> None:
         osc_port=args.port,
         audio_device=args.device,
         chunk_size=args.buffer_size,
-        enable_filters=args.enable_filters
+        enable_filters=args.enable_filters,
+        use_optimized_filters=args.optimized_filters
     )
     server.clock.bpm = args.bpm
     server.print_clock = bool(args.watch)
@@ -1240,9 +1325,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    def _print_all_messages(self, address: str, *args: object) -> None:
-        """Print every OSC message received (for debugging)."""
-        try:
-            print(f"📡 OSC MESSAGE: {address} {args}")
-        except Exception as exc:
-            print(f"❌ Error printing OSC message: {exc}")
