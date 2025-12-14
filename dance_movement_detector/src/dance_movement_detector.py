@@ -259,6 +259,9 @@ class DanceMovementDetector:
                 # Send keypoint data for skeleton visualization
                 self._send_keypoint_data(track_ids, keypoints, w, h)
 
+                # Send person count immediately with keypoints (critical for visualizers)
+                self._send_person_count(len(active_ids))
+
                 # Cleanup old tracks
                 self.tracker.cleanup_old_tracks(active_ids)
 
@@ -358,6 +361,15 @@ class DanceMovementDetector:
                 except Exception:
                     # Silently continue if visualizer is not running
                     pass
+
+    def _send_person_count(self, count: int):
+        """Send person count immediately (called every frame for visualizers)"""
+        base_address = self.config.get('osc_base_address', '/dance')
+        for client in self.osc_clients:
+            try:
+                client.send_message(f"{base_address}/person_count", int(count))
+            except Exception:
+                pass
 
     def _send_osc_messages(self, stats: MovementStats):
         """Send movement statistics via OSC to all destinations"""
