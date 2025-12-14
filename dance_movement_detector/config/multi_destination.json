@@ -26,6 +26,11 @@
       "host": "127.0.0.1",
       "port": 5009,
       "description": "Blur Skeleton Visualizer"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 57120,
+      "description": "OSC Listener (python-osc)"
     }
   ],
   "osc_base_address": "/dance",

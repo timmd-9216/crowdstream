@@ -4,7 +4,7 @@
 
   "_comment_performance": "Performance optimizations for Raspberry Pi 4",
   "model": "yolov8n-pose.pt",
-  "imgsz": 416,
+  "imgsz": 320320320,
   "conf_threshold": 0.3,
   "iou_threshold": 0.5,
   "max_det": 5,
@@ -14,7 +14,7 @@
   "camera_width": 640,
   "camera_height": 480,
   "camera_fps": 30,
-  "skip_frames": 0,
+  "skip_frames": 2,
 
   "osc_destinations": [
     {
@@ -31,11 +31,16 @@
       "host": "127.0.0.1",
       "port": 5009,
       "description": "Blur Skeleton"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 57120,
+      "description": "OSC Listener (python-osc)"
     }
   ],
 
   "osc_base_address": "/dance",
-  "show_video": true,
+  "show_video": false,
   "save_to_file": false,
   "output_file": "movement_stats.json",
 
