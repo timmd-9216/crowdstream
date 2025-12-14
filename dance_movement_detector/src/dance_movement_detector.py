@@ -243,12 +243,24 @@ class DanceMovementDetector:
                 # Extract keypoints and IDs efficiently
                 keypoints = results[0].keypoints.data.cpu().numpy()
 
+                # DEBUG: Check what YOLO detected
+                num_keypoints = len(keypoints)
+                num_boxes = len(results[0].boxes) if results[0].boxes is not None else 0
+
                 # Get tracking IDs if available
                 if results[0].boxes.id is not None:
                     track_ids = results[0].boxes.id.cpu().numpy().astype(int)
+                    num_tracked = len(track_ids)
+
+                    # CRITICAL: Verify alignment between boxes and keypoints
+                    if num_tracked != num_keypoints:
+                        print(f"⚠️ Mismatch: {num_tracked} tracked IDs but {num_keypoints} keypoints! Using sequential IDs.")
+                        track_ids = np.arange(num_keypoints, dtype=int)
                 else:
                     # Generate sequential IDs for untracked detections
-                    track_ids = np.arange(len(keypoints), dtype=int)
+                    track_ids = np.arange(num_keypoints, dtype=int)
+                    if num_keypoints > 0:
+                        print(f"⚠️ Tracking failed: {num_keypoints} people detected but no IDs assigned")
 
                 # Update tracker with new poses
                 active_ids = set()
@@ -261,6 +273,10 @@ class DanceMovementDetector:
 
                 # Send person count immediately with keypoints (critical for visualizers)
                 self._send_person_count(len(active_ids))
+
+                # DEBUG: Log detection info every 30 frames
+                if frame_count % 30 == 0:
+                    print(f"[DEBUG] Frame {frame_count}: {len(active_ids)} people, IDs: {sorted(active_ids)}, keypoints shape: {keypoints.shape}")
 
                 # Cleanup old tracks
                 self.tracker.cleanup_old_tracks(active_ids)
@@ -333,6 +349,11 @@ class DanceMovementDetector:
         # Pre-calculate inverse dimensions to avoid repeated division (faster)
         inv_width = 1.0 / frame_width
         inv_height = 1.0 / frame_height
+
+        # DEBUG: Verify we're iterating over all people
+        num_people = len(track_ids)
+        if self.config.get('debug_osc', False) and num_people > 1:
+            print(f"[OSC] Sending keypoints for {num_people} people: IDs {track_ids.tolist()}")
 
         # Send keypoints for each person in BOTH formats for compatibility
         for person_id, kps in zip(track_ids, keypoints):
