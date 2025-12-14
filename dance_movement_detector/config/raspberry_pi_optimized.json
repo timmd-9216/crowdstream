@@ -4,7 +4,7 @@
 
   "_comment_performance": "Performance optimizations for Raspberry Pi 4",
   "model": "yolov8n-pose.pt",
-  "imgsz": 320320320,
+  "imgsz": 320,
   "conf_threshold": 0.3,
   "iou_threshold": 0.5,
   "max_det": 5,
