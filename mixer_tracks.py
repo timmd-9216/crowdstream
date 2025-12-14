@@ -1,0 +1,654 @@
+# mixer.py
+# Single-phase EQ move:
+# Both decks play; B starts fully filtered (low/mid/high=0%);
+# from beat 8 to beat 16, ramp B.low 0→50% while A.low 50→0%;
+# final state: A plays mids/highs (low cut), B plays lows (mids/highs still cut).
+#
+# Timeline:
+#   t = 0.00s: /play A (Pure Love)
+#   t = 0.00s: /play B (Moth To A Flame – Adriatique Remix)
+#   t = 3.90s .. 7.80s: Bass handoff (A.low 50→0, B.low 0→50); both decks audible
+#
+# Notes:
+# - This sends /deck_eq <deck> <band> <value> (0..100). Your engine needs to handle it.
+# - If /deck_eq is unhandled, messages are harmless no-ops.
+
+from pythonosc.udp_client import SimpleUDPClient
+import argparse, time, csv, random, wave
+from typing import Any
+from pathlib import Path
+
+BPM_REF = 122.5  # Reference only; not used for playback timing.
+
+# Single timing offset used everywhere: gives the engine time to preload before playback.
+PRELOAD_OFFSET_SEC = 1.0
+
+def _read_selected_csv(csv_path: str | Path) -> list[dict]:
+    rows: list[dict] = []
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        r = csv.DictReader(f)
+        for row in r:
+            if not row.get("part_file"):
+                continue
+            rows.append(row)
+    return rows
+
+
+def _pick_three_rows(rows: list[dict], seed: int | None = None) -> tuple[dict, dict, dict]:
+    if len(rows) < 3:
+        raise ValueError("CSV must contain at least 3 rows with part_file")
+    rng = random.Random(seed)
+    rows2 = list(rows)
+    rng.shuffle(rows2)
+    return rows2[0], rows2[1], rows2[2]
+
+
+def _wav_duration_seconds(p: str | Path) -> float | None:
+    try:
+        with wave.open(str(p), "rb") as wf:
+            return wf.getnframes() / float(wf.getframerate())
+    except Exception:
+        return None
+
+def _is_bar_or_half_bar(seconds: float, bpm: float, tol_beats: float = 0.05) -> tuple[bool, float, str]:
+    """Return (True, delta, kind) if begin_cue_adj is close to 0 or 2 beats modulo 4.
+
+    kind is 'bar' (0 beats) or 'half' (2 beats).
+    delta is the signed distance in beats from the matched grid point.
+    """
+    beats = float(seconds) * float(bpm) / 60.0
+    beats_mod_4 = beats % 4.0
+
+    # Distance to bar start (0 beats)
+    d0 = beats_mod_4  # distance from 0
+    if abs(d0) <= tol_beats or abs(d0 - 4.0) <= tol_beats:
+        return True, d0 if abs(d0) <= tol_beats else d0 - 4.0, "bar"
+
+    # Distance to half‑bar (2 beats)
+    d2 = beats_mod_4 - 2.0
+    if abs(d2) <= tol_beats:
+        return True, d2, "half"
+
+    return False, 0.0, ""
+
+
+
+def _row_begin_cue_adj(row: dict) -> float | None:
+    try:
+        v = row.get("begin_cue_adj")
+        if v is None or v == "":
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+# Helper: Parse end_cue_adj as float from row.
+def _row_end_cue_adj(row: dict) -> float | None:
+    try:
+        v = row.get("end_cue_adj")
+        if v is None or v == "":
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+ # Helper: Parse float value from a CSV row for a given key.
+def _row_float(row: dict, key: str) -> float | None:
+    try:
+        v = row.get(key)
+        if v is None or v == "":
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+# --- Diagnostics helpers for dropped rows ---
+def _row_name(row: dict) -> str:
+    p = row.get("path") or row.get("part_file") or ""
+    return Path(p).name
+
+def _alignment_diag(seconds: float | None, bpm: float) -> tuple[bool, str]:
+    """Return (ok, message) for alignment of a cue time in seconds."""
+    if seconds is None:
+        return False, "missing"
+    ok, delta, kind = _is_bar_or_half_bar(float(seconds), bpm)
+    if not ok:
+        beats = float(seconds) * float(bpm) / 60.0
+        beats_mod_4 = beats % 4.0
+        return False, f"offgrid: t={seconds:.3f}s beats={beats:.3f} mod4={beats_mod_4:.3f}"
+    label = "bar" if kind == "bar" else "half"
+    return True, f"ok:{label} Δ={delta:+.3f} beats (t={seconds:.3f}s)"
+
+
+def _safe_float_from_row(row: dict, key: str, default: float | None = None) -> float | None:
+    v = _row_float(row, key)
+    return default if v is None else float(v)
+
+
+def _deck_for_index(i: int) -> str:
+    # Cycles through A, B, C, A, ...
+    decks = ["A", "B", "C"]
+    return decks[i % 3]
+
+
+
+def build_playlist(rows: list[dict], seed: int | None, preload_offset: float = PRELOAD_OFFSET_SEC) -> list[dict]:
+    """Return a shuffled playlist with operational timing columns.
+
+    Columns (relative to global t=0):
+      - deck: A/B/C cycling
+      - load_at: when to send /cue for this row (preload window)
+      - start_playing_at: when playback is expected to start (load_at + preload_offset)
+      - next_song_cue: when to begin fade-out / transition to the next song
+                       (start_playing_at + begin_cue_adj)
+      - end_playing_at: when playback ends (start_playing_at + end_cue_adj)
+
+    Definitions:
+      - First row: load_at = 0.0; start_playing_at = preload_offset
+      - For i>0: start_playing_at[i] = next_song_cue[i-1]
+                load_at[i] = max(0, start_playing_at[i] - preload_offset)
+    """
+    if len(rows) < 1:
+        return []
+
+    rng = random.Random(seed)
+    seq = list(rows)
+    rng.shuffle(seq)
+
+    playlist: list[dict] = []
+    for i, r in enumerate(seq):
+        b = float(_safe_float_from_row(r, "begin_cue_adj", default=0.0) or 0.0)
+        e = float(_safe_float_from_row(r, "end_cue_adj", default=0.0) or 0.0)
+
+        if i == 0:
+            load_at = 0.0
+            start_playing_at = float(preload_offset)
+        else:
+            start_playing_at = float(playlist[i - 1]["next_song_cue"])
+            load_at = max(0.0, float(start_playing_at) - float(preload_offset))
+
+        next_song_cue = float(start_playing_at) + float(b)
+        end_playing_at = float(start_playing_at) + float(e)
+
+        rr = dict(r)
+        rr["deck"] = _deck_for_index(i)
+        rr["load_at"] = float(load_at)
+        rr["start_playing_at"] = float(start_playing_at)
+        rr["next_song_cue"] = float(next_song_cue)
+        rr["end_playing_at"] = float(end_playing_at)
+        playlist.append(rr)
+
+    return playlist
+
+
+def _print_playlist(pl: list[dict], max_rows: int = 50) -> None:
+    print("\n=== PLAYLIST (first rows) ===")
+    n = min(len(pl), max_rows)
+    for i in range(n):
+        r = pl[i]
+        name = _row_name(r)
+        deck = r.get("deck")
+        load_at = float(r.get("load_at", 0.0))
+        sp = float(r.get("start_playing_at", 0.0))
+        cue = float(r.get("next_song_cue", 0.0))
+        en = float(r.get("end_playing_at", 0.0))
+        b = float(_safe_float_from_row(r, "begin_cue_adj", default=0.0) or 0.0)
+        e = float(_safe_float_from_row(r, "end_cue_adj", default=0.0) or 0.0)
+        print(
+            f"[{i:03d}] deck={deck} load_at={load_at:8.3f}s  start={sp:8.3f}s  cue_next={cue:8.3f}s  end={en:8.3f}s  "
+            f"begin={b:7.3f}s  end={e:7.3f}s  {name}"
+        )
+    if len(pl) > n:
+        print(f"... ({len(pl) - n} more)\n")
+
+
+# --- Export playlist to CSV ---
+def write_playlist_csv(pl: list[dict], out_csv: str | Path) -> None:
+    """Write the computed playlist (including operational timing columns) to a CSV file."""
+    out_csv = Path(out_csv)
+    if not pl:
+        # Still write a header-only CSV to be explicit
+        out_csv.write_text("", encoding="utf-8")
+        return
+
+    # Prefer a stable, readable column order
+    preferred = [
+        "deck",
+        "load_at",
+        "start_playing_at",
+        "next_song_cue",
+        "end_playing_at",
+        "path",
+        "part_file",
+        "bpm",
+        "key",
+        "target_bpm",
+        "speed",
+        "ini_cue",
+        "begin_cue",
+        "end_cue",
+        "begin_cue_adj",
+        "end_cue_adj",
+        "begin_cue_adj_full",
+        "end_cue_adj_full",
+        "duration_orig",
+        "duration_sectioned",
+    ]
+
+    # Include any extra columns present in the rows (at the end)
+    extras: list[str] = []
+    for r in pl:
+        for k in r.keys():
+            if k not in preferred and k not in extras:
+                extras.append(k)
+
+    fieldnames = [k for k in preferred if any(k in r for r in pl)] + extras
+
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    with out_csv.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        for r in pl:
+            w.writerow({k: r.get(k, "") for k in fieldnames})
+
+    print(f"\n✅ Wrote playlist CSV: {out_csv}")
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Mixer: pick two sectioned tracks from a CSV and start them with a scheduled offset."
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Engine host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=57120, help="Engine OSC port (default: 57120)")
+    parser.add_argument(
+        "--csv",
+        default="track_data_Cm-Gm_122-d3.csv",
+        help="CSV produced by struct_loader.py (default: track_data_Bm-Em_122-d3.csv in repo).",
+    )
+    parser.add_argument(
+        "--preload-offset",
+        type=float,
+        default=PRELOAD_OFFSET_SEC,
+        help="Seconds between /cue and expected playback start (default: 1.0).",
+    )
+    parser.add_argument("--seed", type=int, default=None, help="Optional RNG seed for reproducible random selection.")
+    parser.add_argument(
+        "--xfade-steps",
+        type=int,
+        default=40,
+        help="Number of steps for the low/high-pass transition (default: 40).",
+    )
+    parser.add_argument(
+        "--print-playlist",
+        action="store_true",
+        help="Print the computed shuffled playlist timing table and exit (debug).",
+    )
+    parser.add_argument(
+        "--playlist-csv",
+        default="playlist_operational.csv",
+        help="Write the computed operational playlist to this CSV file (default: playlist_operational.csv).",
+    )
+    args = parser.parse_args()
+
+    rows = _read_selected_csv(args.csv)
+
+    # Keep only rows missing cues; keep off-grid, just track stats.
+    kept: list[dict] = []
+    dropped: list[dict] = []
+    drop_reasons = {"missing_begin": 0, "missing_end": 0, "begin_offgrid": 0, "end_offgrid": 0}
+    dropped_detail: list[tuple[dict, str]] = []
+
+    for r in rows:
+        bca = _row_begin_cue_adj(r)
+        eca = _row_end_cue_adj(r)
+
+        ok_b, msg_b = _alignment_diag(bca, BPM_REF)
+        ok_e, msg_e = _alignment_diag(eca, BPM_REF)
+
+        if bca is None:
+            drop_reasons["missing_begin"] += 1
+            dropped.append(r)
+            dropped_detail.append((r, f"begin_cue_adj missing; end={msg_e}"))
+            continue
+        if eca is None:
+            drop_reasons["missing_end"] += 1
+            dropped.append(r)
+            dropped_detail.append((r, f"end_cue_adj missing; begin={msg_b}"))
+            continue
+
+        # Track off-grid stats, but do NOT drop for it
+        if not ok_b:
+            drop_reasons["begin_offgrid"] += 1
+        if not ok_e:
+            drop_reasons["end_offgrid"] += 1
+
+        kept.append(r)
+        if ok_b and ok_e:
+            print(f"🎵 Grid-aligned: {_row_name(r)}  begin={msg_b}  end={msg_e}")
+        else:
+            print(f"⚠️ Off-grid (kept): {_row_name(r)}  begin={msg_b}  end={msg_e}")
+
+    if dropped_detail:
+        print(
+            "⚠️ Dropped rows summary: "
+            + ", ".join([f"{k}={v}" for k, v in drop_reasons.items()])
+            + f" (total={len(dropped_detail)})"
+        )
+        # Print detailed diagnostics for the first N dropped rows
+        N = min(30, len(dropped_detail))
+        print(f"\n--- Dropped details (first {N}) ---")
+        for row, reason in dropped_detail[:N]:
+            print(f"  - {_row_name(row)} :: {reason}")
+
+    rows = kept
+    # Build playlist table (shuffled with seed) with explicit timing columns
+    playlist = build_playlist(
+        rows,
+        seed=args.seed,
+        preload_offset=float(args.preload_offset),
+    )
+
+    # Print the first row in an easy-to-read way (requested: define columns + first row)
+    if playlist:
+        r0 = playlist[0]
+        print("\n=== FIRST ROW (operational columns) ===")
+        print(f"deck={r0.get('deck')}  load_at={float(r0.get('load_at', 0.0)):.3f}s  start_playing_at={float(r0.get('start_playing_at', 0.0)):.3f}s  "
+              f"next_song_cue={float(r0.get('next_song_cue', 0.0)):.3f}s  end_playing_at={float(r0.get('end_playing_at', 0.0)):.3f}s")
+
+    # Export playlist to CSV for inspection / debugging
+    if args.playlist_csv:
+        write_playlist_csv(playlist, args.playlist_csv)
+
+    if getattr(args, "print_playlist", False):
+        _print_playlist(playlist, max_rows=200)
+        return
+
+    # --- Playlist-driven scheduling (debug) ---
+    client = SimpleUDPClient(args.host, args.port)
+
+    def send(addr, *payload):
+        client.send_message(addr, payload)
+        print(f"→ {addr} {payload}  (sent by mixer clock)", flush=True)
+
+    send("/reset", [])
+    # Start from silence / flat EQ
+    send("/deck_levels", 0.0, 0.0, 0.0, 0.0)
+    send("/deck_eq_all", "A", 50, 50, 50)
+    send("/deck_eq_all", "B", 50, 50, 50)
+    send("/deck_eq_all", "C", 50, 50, 50)
+
+    def levels_for(decks: list[str], vols: dict[str, float]) -> tuple[float, float, float, float]:
+        # Map A/B/C/D (D unused)
+        return (
+            float(vols.get("A", 0.0)),
+            float(vols.get("B", 0.0)),
+            float(vols.get("C", 0.0)),
+            float(vols.get("D", 0.0)),
+        )
+
+    # Build timed events for cue + start (no stop_group; use deck_levels=0 instead)
+    events: list[tuple[float, str, tuple[Any, ...]]] = []
+    for i, r in enumerate(playlist):
+        deck = r["deck"]
+        track = r["part_file"]
+        t_load = float(r["load_at"])
+        t_start = float(r["start_playing_at"])
+        events.append((t_load, "/cue", (deck, track, 0.0)))
+
+        # If this is not the first track, it starts at the exact moment a crossfade window begins.
+        # Ensure deck_levels keyframes at t_start are applied BEFORE starting the new deck.
+        t_start_send = t_start if i == 0 else (t_start + 0.0005)
+        events.append((t_start_send, "/start_group", (0.0, deck)))
+
+        # Only the first track needs an explicit "audible now" level (others fade in during the window).
+        if i == 0:
+            events.append((t_start + 0.002, "/deck_levels", (1.0, 0.0, 0.0, 0.0)))
+
+    # Timeline end
+    t_end_all = float(playlist[-1]["end_playing_at"]) if playlist else 0.0
+    print(f"\n⏹️  Playlist will finish at t={t_end_all:.3f}s (relative).")
+
+    # Crossfade config
+    FADE_STEPS = 40  # smooth enough without spamming too hard
+
+    # Precompute all fade keyframes (deck_levels + optional EQ shaping) as timed events
+    vols: dict[str, float] = {"A": 0.0, "B": 0.0, "C": 0.0, "D": 0.0}
+
+    for i in range(len(playlist)):
+        cur = playlist[i]
+        cur_deck = str(cur["deck"])
+        t_start = float(cur["start_playing_at"])
+        t_cue = float(cur["next_song_cue"])
+        t_end = float(cur["end_playing_at"])
+
+        # If there is a next track, crossfade between t_cue and t_end
+        if i + 1 < len(playlist):
+            nxt = playlist[i + 1]
+            nxt_deck = str(nxt["deck"])
+
+            fade_dur = max(0.001, t_end - t_cue)
+            for s in range(FADE_STEPS + 1):
+                a = s / FADE_STEPS
+                t = t_cue + a * fade_dur
+
+                # Volumes: out 1->0, in 0->1
+                out_v = 1.0 - a
+                in_v = a
+                lv = {**vols}
+                lv[cur_deck] = out_v
+                lv[nxt_deck] = in_v
+                events.append((t, "/deck_levels", levels_for(["A", "B", "C", "D"], lv)))
+
+                # EQ crossfade: outgoing 50/50/50 -> 0/0/0, incoming 0/0/0 -> 50/50/50
+                out_band = int(round(50 * (1.0 - a)))
+                in_band = int(round(50 * a))
+                events.append((t, "/deck_eq_all", (cur_deck, out_band, out_band, out_band)))
+                events.append((t, "/deck_eq_all", (nxt_deck, in_band, in_band, in_band)))
+
+            # Lock final state: outgoing silent, incoming fully up
+            events.append((t_end + 0.001, "/deck_levels", levels_for(["A", "B", "C", "D"], {**vols, cur_deck: 0.0, nxt_deck: 1.0})))
+        else:
+            # Last track: just mute all at end (explicit)
+            events.append((t_end + 0.001, "/deck_levels", (0.0, 0.0, 0.0, 0.0)))
+
+    # Run the schedule using the mixer's clock
+    t0 = time.monotonic()
+    for t_rel, addr, payload in sorted(events, key=lambda x: x[0]):
+        target = t0 + float(t_rel)
+        now = time.monotonic()
+        if target > now:
+            time.sleep(target - now)
+        send(addr, *payload)
+
+    print("✅ Scheduled playlist cue/start + crossfades (deck_levels + eq).")
+    return
+
+    row_a, row_b, row_c = _pick_three_rows(rows, seed=args.seed)
+
+    track_a = row_a["part_file"]
+    track_b = row_b["part_file"]
+    track_c = row_c["part_file"]
+
+    # Schedule starts exactly as:
+    # A at start_in
+    # B at start_in + begin_cue_adj(A)
+    # C at start_in + begin_cue_adj(A) + begin_cue_adj(B)
+
+    begin_a = _row_float(row_a, "begin_cue_adj") or 0.0
+    begin_b = _row_float(row_b, "begin_cue_adj") or 0.0
+
+    start_a = float(args.start_in)
+    start_b = start_a + begin_a
+    start_c = start_b + begin_b
+
+    # Track B end (relative to the global timeline) for the B→C handoff window
+    end_b = _row_float(row_b, "end_cue_adj")
+    if end_b is None:
+        raise ValueError("Track B row is missing end_cue_adj; cannot schedule B→C window")
+    b_end_rel = start_b + float(end_b)
+
+    # Compute end_a (Track A's end_cue_adj, in seconds)
+    end_a = _row_float(row_a, "end_cue_adj") or None
+    if end_a is None:
+        raise ValueError("Track A row is missing end_cue_adj; cannot schedule filter transition.")
+
+    dur_a = _wav_duration_seconds(track_a)
+    dur_b = _wav_duration_seconds(track_b)
+    dur_c = _wav_duration_seconds(track_c)
+
+    print(f"🎛️ BPM_REF={BPM_REF} (reference only)")
+    print(f"🎚️ Track A: {track_a}")
+    print(f"🎚️ Track B: {track_b}")
+    print(f"🎚️ Track C: {track_c}")
+    print(f"⏱️ start_in (A start): {start_a:.3f} s")
+    print(f"⏱️ begin_cue_adj(A): {begin_a:.3f} s")
+    print(f"⏱️ begin_cue_adj(B): {begin_b:.3f} s")
+    print(f"⏱️ B scheduled start: {start_b:.3f} s  [start_in + begin_cue_adj(A)]")
+    print(f"⏱️ C scheduled start: {start_c:.3f} s  [start_in + begin_cue_adj(A) + begin_cue_adj(B)]")
+    print(f"⏱️ B scheduled end: {b_end_rel:.3f} s  [B start + end_cue_adj(B)]")
+    if dur_a is not None:
+        print(f"⏱️ Track A duration: {dur_a:.2f} s")
+    if dur_b is not None:
+        print(f"⏱️ Track B duration: {dur_b:.2f} s")
+    if dur_c is not None:
+        print(f"⏱️ Track C duration: {dur_c:.2f} s")
+
+    client = SimpleUDPClient(args.host, args.port)
+    def send(addr, *payload):
+        client.send_message(addr, payload)
+        print(f"→ {addr} {payload}", flush=True)
+
+    # Reset, set levels/EQ, cue both, then start together with offset
+    send("/reset", [])
+    # Set deck levels for A/B/C (D unused)
+    send("/deck_levels", 1.0, 1.0, 1.0, 0.0)
+    # Initial EQ:
+    # - A full spectrum (flat)
+    # - B fully filtered (silent) until we open its low band
+    send("/deck_eq_all", "A", 50, 50, 50)
+    send("/deck_eq_all", "B", 0, 0, 0)
+    send("/deck_eq_all", "C", 0, 0, 0)
+
+    # Cue both at position 0.0
+    send("/cue", "A", track_a, 0.0)
+    send("/cue", "B", track_b, 0.0)
+    send("/cue", "C", track_c, 0.0)
+
+    # Start A at start_a, B at start_b, C at start_c
+    send("/start_group", start_a, "A")
+    send("/start_group", start_b, "B")
+    send("/start_group", start_c, "C")
+
+    # Unified staged EQ handoffs: A→B and B→C
+    t0 = time.monotonic()
+
+    t_ab_start = start_b
+    t_ab_end = start_a + end_a
+
+    t_bc_start = start_c
+    t_bc_end = b_end_rel
+
+    t_start = min(t_ab_start, t_bc_start)
+    t_end = max(t_ab_end, t_bc_end)
+
+    if t_end <= t_start:
+        print("⚠️ Transition window is empty; skipping filter ramp.")
+    else:
+        steps = max(2, int(args.xfade_steps))
+
+        def clamp01(x: float) -> float:
+            return 0.0 if x < 0.0 else (1.0 if x > 1.0 else x)
+
+        def staged_p(alpha01: float) -> tuple[float, float, float]:
+            # 3-phase: lows then mids then highs
+            phase = alpha01 * 3.0
+            p_low = clamp01(phase - 0.0)
+            p_mid = clamp01(phase - 1.0)
+            p_high = clamp01(phase - 2.0)
+            return p_low, p_mid, p_high
+
+        def progress(now_rel: float, start_rel: float, end_rel: float) -> float:
+            if now_rel <= start_rel:
+                return 0.0
+            if now_rel >= end_rel:
+                return 1.0
+            return (now_rel - start_rel) / (end_rel - start_rel)
+
+        for i in range(steps + 1):
+            alpha = i / steps
+            target_rel = t_start + (t_end - t_start) * alpha
+            target_abs = t0 + target_rel
+
+            now_abs = time.monotonic()
+            if target_abs > now_abs:
+                time.sleep(target_abs - now_abs)
+
+            now_rel = target_rel
+
+            # Compute handoff progresses
+            pab = progress(now_rel, t_ab_start, t_ab_end)
+            pbc = progress(now_rel, t_bc_start, t_bc_end)
+
+            p_ab_low, p_ab_mid, p_ab_high = staged_p(pab)
+            p_bc_low, p_bc_mid, p_bc_high = staged_p(pbc)
+
+            # Deck A values (only affected by A→B)
+            a_low = int(round(50 * (1.0 - p_ab_low)))
+            a_mid = int(round(50 * (1.0 - p_ab_mid)))
+            a_high = int(round(50 * (1.0 - p_ab_high)))
+
+            # Deck C values (only affected by B→C)
+            c_low = int(round(50 * p_bc_low))
+            c_mid = int(round(50 * p_bc_mid))
+            c_high = int(round(50 * p_bc_high))
+
+            # Deck B values: opened by A→B then closed by B→C (when overlapping)
+            b_low = int(round(50 * p_ab_low * (1.0 - p_bc_low)))
+            b_mid = int(round(50 * p_ab_mid * (1.0 - p_bc_mid)))
+            b_high = int(round(50 * p_ab_high * (1.0 - p_bc_high)))
+
+            # Respect deck start times: before a deck starts, keep it muted
+            if now_rel < start_a:
+                a_low = a_mid = a_high = 0
+            if now_rel < t_ab_start:  # before B starts
+                b_low = b_mid = b_high = 0
+            if now_rel < t_bc_start:  # before C starts
+                c_low = c_mid = c_high = 0
+
+            # --- Extra safety: explicit volume handoff ---
+            a_level = 1.0 - pab
+            c_level = pbc
+            b_level = pab * (1.0 - pbc)
+
+            if now_rel < start_a:
+                a_level = 0.0
+            if now_rel < t_ab_start:
+                b_level = 0.0
+            if now_rel < t_bc_start:
+                c_level = 0.0
+
+            a_level = 0.0 if a_level < 0.0 else (1.0 if a_level > 1.0 else a_level)
+            b_level = 0.0 if b_level < 0.0 else (1.0 if b_level > 1.0 else b_level)
+            c_level = 0.0 if c_level < 0.0 else (1.0 if c_level > 1.0 else c_level)
+
+            send("/deck_levels", float(a_level), float(b_level), float(c_level), 0.0)
+
+            # Apply EQ
+            send("/deck_eq", "A", "low", a_low)
+            send("/deck_eq", "A", "mid", a_mid)
+            send("/deck_eq", "A", "high", a_high)
+
+            send("/deck_eq", "B", "low", b_low)
+            send("/deck_eq", "B", "mid", b_mid)
+            send("/deck_eq", "B", "high", b_high)
+
+            send("/deck_eq", "C", "low", c_low)
+            send("/deck_eq", "C", "mid", c_mid)
+            send("/deck_eq", "C", "high", c_high)
+
+        print("✅ Completed staged handoffs: A→B and B→C.")
+
+    print("✅ Started tracks A/B/C and ran staged filter handoffs A→B→C.")
+    return
+
+if __name__ == "__main__":
+    main()
