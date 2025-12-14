@@ -3,165 +3,475 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>Crowdstream</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crowdstream - AI-Powered Collective Music Creation</title>
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: sans-serif;
-      background: #f9f9f9;
-      color: #333;
-      padding: 20px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      line-height: 1.6;
+      overflow-x: hidden;
     }
 
-    .container {
-      max-width: 800px;
-      margin: auto;
-      background: #fff;
-      padding: 20px;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    /* Animated background gradient */
+    .bg-gradient {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 50%, #0a0a0a 100%);
+      animation: gradientShift 15s ease infinite;
     }
 
-    h1 {
-      text-align: center;
-      margin-bottom: 5px;
-    }
-
-    .subtitle {
-      text-align: center;
-      color: #666;
-      margin-top: 0;
-    }
-
-    .diagram {
-      max-width: 100%;
-      display: block;
-      margin: 30px auto;
-      animation: pulse 4s ease-in-out infinite;
-    }
-
-    .section {
-      margin-top: 40px;
-    }
-
-    .section h2 {
-      border-bottom: 1px solid #eaeaea;
-      padding-bottom: 5px;
-      margin-bottom: 15px;
-      font-weight: normal;
-    }
-
-    /* .sensing-images {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-    }
-
-    .sensing-images img {
-      max-width: 48%;
-      margin-bottom: 20px;
-      border-radius: 4px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    } */
-
-    .sensing-images {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .sensing-images img {
-      max-width: 80%;
-      margin-bottom: 20px;
-      border-radius: 4px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
-
-    @keyframes pulse {
+    @keyframes gradientShift {
 
       0%,
       100% {
-        transform: scale(1);
         opacity: 1;
       }
 
       50% {
-        transform: scale(1.03);
-        opacity: 0.95;
+        opacity: 0.8;
       }
+    }
+
+    /* Grid overlay effect */
+    .grid-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      background-image:
+        linear-gradient(rgba(138, 43, 226, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(138, 43, 226, 0.1) 1px, transparent 1px);
+      background-size: 50px 50px;
+      opacity: 0.3;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* Header */
+    header {
+      padding: 60px 0 40px;
+      text-align: center;
+      position: relative;
+    }
+
+    .logo {
+      font-size: 4rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -2px;
+      margin-bottom: 0px;
+      animation: glow 3s ease-in-out infinite;
+    }
+
+    .subtitle {
+      font-size: 2rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -1px;
+      margin-bottom: 6px;
+    }
+
+    @keyframes glow {
+
+      0%,
+      100% {
+        filter: drop-shadow(0 0 20px rgba(138, 43, 226, 0.4));
+      }
+
+      50% {
+        filter: drop-shadow(0 0 30px rgba(138, 43, 226, 0.6));
+      }
+    }
+
+    .tagline {
+      font-size: 1.3rem;
+      color: #a0a0a0;
+      font-weight: 300;
+      margin-bottom: 0px;
+      letter-spacing: 1px;
+    }
+
+    /* Hero section */
+    .hero {
+      text-align: center;
+      padding: 10px 0 60px;
+    }
+
+    .hero-text {
+      font-size: 1.2rem;
+      max-width: 800px;
+      margin: 0 auto 40px;
+      color: #b0b0b0;
+      line-height: 1.8;
+    }
+
+    .hero-diagrams {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .diagram {
+      width: 100%;
+      max-width: 580px;
+      border-radius: 12px;
+    }
+
+    .diagram2 {
+      width: 100%;
+      max-width: 430px;
+      border-radius: 12px;
+    }
+
+    /* Section styling */
+    .section {
+      margin: 80px 0;
+      padding: 60px 40px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 20px;
+      border: 1px solid rgba(138, 43, 226, 0.15);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+
+    .section:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(138, 43, 226, 0.3);
+      transform: translateY(-5px);
+      box-shadow: 0 12px 40px rgba(138, 43, 226, 0.2);
+    }
+
+    .section h2 {
+      font-size: 2.5rem;
+      margin-bottom: 30px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: 800;
+    }
+
+    .section p {
+      font-size: 1.1rem;
+      color: #b0b0b0;
+      line-height: 1.8;
+      margin-bottom: 30px;
+    }
+
+    /* Image grid */
+    .sensing-images {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
+      margin-top: 40px;
+    }
+
+    .sensing-images img {
+      width: 90%;
+      max-width: 700px;
+      border-radius: 12px;
+      border: 1px solid rgba(138, 43, 226, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transition: all 0.3s ease;
+    }
+
+    /* Video container */
+    .video-container {
+      position: relative;
+      max-width: 800px;
+      margin: 40px auto;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(138, 43, 226, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .video-container iframe {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      display: block;
+      border: none;
+    }
+
+    /* Feature cards */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 30px;
+      margin-top: 10px;
+    }
+
+    .feature-card {
+      padding: 40px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 16px;
+      border: 1px solid rgba(138, 43, 226, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(138, 43, 226, 0.4);
+      transform: translateY(-10px);
+      box-shadow: 0 12px 40px rgba(138, 43, 226, 0.3);
+    }
+
+    .feature-icon {
+      font-size: 3rem;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 15px;
+      color: #667eea;
+    }
+
+    .feature-card p {
+      font-size: 1rem;
+      color: #a0a0a0;
+    }
+
+    /* CTA button */
+    .cta {
+      text-align: center;
+      margin: 80px 0 60px;
+    }
+
+    .cta-button {
+      display: inline-block;
+      padding: 18px 48px;
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 50px;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 24px rgba(138, 43, 226, 0.4);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(138, 43, 226, 0.6);
+    }
+
+    .cta-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s;
+    }
+
+    .cta-button:hover::before {
+      left: 100%;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 40px 0;
+      color: #666;
+      border-top: 1px solid rgba(138, 43, 226, 0.1);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .logo {
+        font-size: 2.5rem;
+      }
+
+      .tagline {
+        font-size: 1rem;
+      }
+
+      .section h2 {
+        font-size: 2rem;
+      }
+
+      .section {
+        padding: 40px 20px;
+      }
+
+      .sensing-images img {
+        width: 100%;
+      }
+    }
+
+    /* Scroll animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .section {
+      animation: fadeInUp 0.8s ease-out;
     }
   </style>
 </head>
 
 <body>
-  <div class="container">
-    <h1>Crowdstream</h1>
-    <p class="subtitle">Synthesized Co-Creation of Music with AI + Audience</p>
-    <img class="diagram" src="https://www.columbia.edu/~xig2000/sintesisColectiva/media/diagramaDji.jpg"
-      alt="Crowdstream Diagram">
+  <div class="bg-gradient"></div>
+  <div class="grid-overlay"></div>
 
-    <div class="section">
+  <div class="container">
+    <header>
+      <h1 class="logo">Crowdstream</h1>
+      <p class="subtitle">Where the crowd becomes the composer</p>
+    </header>
+
+    <section class="hero">
+      <p class="hero-text">
+        Crowdstream positions itself in the territory where the body becomes an interface and presence is
+        transformed into signal. The work proposes a rereading of the role of the DJ: no longer as a central figure who
+        directs the dance floor, but as a living system, an organism that listens and responds. It is the crowd that
+        sets
+        the tempo, that decides without consciously deciding, that writes the sonic narrative through its own kinetic
+        energy.
+      </p>
+      <div class="hero-diagrams">
+        <img class="diagram" src="assets/crowdstream_system_diagram.png" alt="Crowdstream System Diagram">
+        <img class="diagram2" src="assets/cartoon_diagram.png" alt="Crowdstream Flow Diagram">
+      </div>
+    </section>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🎵</div>
+        <h3>AI-Generated Music</h3>
+        <p>Dynamic music generation and remixing based on real-time audience input and environmental cues.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👥</div>
+        <h3>Audience as Composer</h3>
+        <p>Your presence, reactions, and movements shape the music. You're not just listening, you're creating.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🤖</div>
+        <h3>Intelligent Sensing</h3>
+        <p>Advanced computer vision analyzes body language, movement, and emotions to understand crowd energy.</p>
+      </div>
+    </div>
+
+    <section class="section">
       <h2>What is Crowdstream?</h2>
       <p>
-      Crowdstream occupies the territory where the body becomes an interface and presence turns into signal. The piece proposes a reinterpretation of the DJ’s role: no longer as the central figure directing the dance floor, but as a living system, an organism that listens and responds. It is the crowd who sets the tempo, who decides without deciding, who writes the sonic narrative through its own kinetic energy.
+        Crowdstream is an interactive music system that generates and mixes sound in real time, driven by signals from
+        the audience. The collective behavior and presence of the crowd directly shape and determine the characteristics
+        of the performance as it unfolds. Crowdstream combines advanced audio processing techniques to extract features,
+        components, and structural elements from a setlist, enabling infinite musical recombinations. This is
+        complemented by a computer vision engine that captures the audience’s movement and dynamics, synthesizing
+        signals that actively drive the composition and performance.
       </p>
       <div class="sensing-images">
-        <!-- replace these with your emotion-detection and pose-detection image URLs -->
-        <img src="assets/cosmic_skeleton.png" alt="Pose Detection">
-
+        <img src="assets/cosmic_skeleton.png" alt="Cosmic Skeleton Visualization">
       </div>
+    </section>
+
+    <section class="section">
       <h2>Sensing the Audience</h2>
-      <p>Crowdstream reads signals from audience movements and emotions, interpreting body language and facial cues to
-        gauge energy and sentiment in real time.</p>
+      <p>
+        Crowdstream reads signals from audience movements and emotions using computer vision techniques, interpreting
+        body language and facial cues to gauge energy and sentiment in real time. Through advanced pose estimation and
+        signal processing, the system translates human presence into musical parameters. These metrics are then routed
+        to the audio engine, where they directly control music mixing, transformation, and generative processes in real
+        time.
+      </p>
       <div class="sensing-images">
-        <!-- replace these with your emotion-detection and pose-detection image URLs -->
-        <img src="assets/pose_estimation.png" alt="Pose Detection">
-        <!-- <img src="assets/emotion_estimation.png" alt="Emoupdate tion Detection"> -->
-        <img src="assets/signal_plot.png" alt="Energy Signal">
+        <img src="assets/signal_plot.png" alt="Energy Signal Visualization">
       </div>
-    </div>
+    </section>
 
-    <div class="section">
+    <section class="section">
       <h2>Generating Music</h2>
-      <p>AI tools generate or remix music dynamically based on audience input and environmental cues, creating an
-        adaptive and expressive musical experience.</p>
-    </div>
+      <p>
+        AI systems first preprocess and then remix music dynamically based on audience input and environmental cues,
+        creating an adaptive and expressive musical experience. The system responds to the collective energy, building
+        sonic landscapes that emerge from the crowd itself, blurring the boundaries between performer and audience and
+        turning participation into a central compositional force.
+      </p>
+    </section>
 
-    <div class="section">
-      <h2>Audience as Composer</h2>
-      <p>Listeners aren’t just passive — their presence, reactions, and inputs help shape the music. Crowdstream treats
-        the audience as co-creators in the artistic process.</p>
-    </div>
-
-    <div class="section">
+    <section class="section">
       <h2>System Overview</h2>
-      
-      <iframe width="560" height="315" 
-        src="https://www.youtube.com/embed/tREraSeL9Co" 
-        title="Crowdstream short presentation at DL4MIR CCRMA's workshop" 
-        frameborder="0" 
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-        allowfullscreen
-        style="display: block; margin: 0 auto;">>
-      </iframe>
+      <p>
+        Presentation of the Crowdstream project at the Deep Learning for Music Information Retrieval Workshop CCRMA,
+        Stanford in August 2025, showcasing the project’s initial concept as well as the system components and the audio
+        and video processing techniques employed.
+      </p>
+      <div class="video-container">
+        <iframe src="https://www.youtube.com/embed/tREraSeL9Co?si=JjYZ9yACu2yxqKRW" title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Demo: Live DJ-Style Stems Mix</h2>
+      <p>
+        A real-time music mixing engine that combines stems from different song sections (intro, verse, chorus),
+        responding to crowd dynamics and creating seamless transitions between musical elements.
+      </p>
+      <div class="video-container">
+        <iframe src="https://www.youtube.com/embed/1cXhiNixB_o?si=ZCfpl9AEgA-zLuqt" title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+      </div>
+    </section>
+
+    <div class="cta">
+      <a href="https://github.com/timmd-9216/crowdstream" target="_blank" class="cta-button">
+        View the Code on GitHub →
+      </a>
     </div>
 
-    <div class="section">
-      <h2>Demo: live dj-like stems mix from an external source</h2>
-
-      <p>A real-time music mixing engine that combines stems from different songs sections (intro, verse, chorus).</p>
-      <iframe width="560" height="315" 
-        src="https://www.youtube.com/embed/1cXhiNixB_o" 
-        title="" 
-        frameborder="0" 
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-        allowfullscreen
-        style="display: block; margin: 0 auto;">>
-      </iframe>
-    </div>
-    
-    
-    <p style="text-align: center; margin-top: 40px;">
-      👉 <a href="https://github.com/timmd-9216/crowdstream" target="_blank">View the Code on GitHub</a>
-    </p>
+    <footer>
+      <p>© 2024 Crowdstream · Where the crowd becomes the composer</p>
+    </footer>
   </div>
 </body>
 
