@@ -107,7 +107,7 @@ def main():
     parser.add_argument("--start-in", type=float, default=0.5, help="Seconds after reset to start Track A (default: 0.5)")
     parser.add_argument(
         "--csv",
-        default="/Users/xaviergonzalez/Documents/repos/crowdstream/selected26.csv",
+        default="./selected26.csv",
         help="CSV produced by struct_loader.py (default: selected_new.csv in repo).",
     )
     parser.add_argument("--seed", type=int, default=None, help="Optional RNG seed for reproducible random selection.")
