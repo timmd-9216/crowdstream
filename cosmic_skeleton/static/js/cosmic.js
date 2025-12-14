@@ -437,11 +437,38 @@ class CosmicSkeletonVisualizer {
         const width = maxX - minX;
         const height = maxY - minY;
 
-        // If already normalized (0-1 range), just scale to canvas
+        // If already normalized (0-1 range), scale to canvas WITH section positioning
         if (maxX <= 1.0 && maxY <= 1.0) {
+            // Calculate section width for multiple people
+            const sectionWidth = this.canvas.width / totalPeople;
+            const sectionPadding = 0.1;
+
+            // Scale to fit in section
+            const availableWidth = sectionWidth * (1 - 2 * sectionPadding);
+            const availableHeight = this.canvas.height * (1 - 2 * sectionPadding);
+
+            // Calculate bounding box in normalized space
+            const normWidth = maxX - minX;
+            const normHeight = maxY - minY;
+
+            const scale = Math.min(
+                availableWidth / (normWidth * this.canvas.width),
+                availableHeight / (normHeight * this.canvas.height)
+            );
+
+            // Center in section
+            const sectionCenterX = sectionWidth * (personIndex + 0.5);
+            const sectionCenterY = this.canvas.height / 2;
+
+            const scaledWidth = normWidth * this.canvas.width * scale;
+            const scaledHeight = normHeight * this.canvas.height * scale;
+
+            const offsetX = sectionCenterX - scaledWidth / 2 - (minX * this.canvas.width * scale);
+            const offsetY = sectionCenterY - scaledHeight / 2 - (minY * this.canvas.height * scale);
+
             return keypoints.map(kp => [
-                kp[0] * this.canvas.width,
-                kp[1] * this.canvas.height,
+                kp[0] * this.canvas.width * scale + offsetX,
+                kp[1] * this.canvas.height * scale + offsetY,
                 kp[2]
             ]);
         }
