@@ -464,6 +464,8 @@ def main():
     client = SimpleUDPClient(client_host, args.port)
 
     def send(addr, *payload):
+        if len(payload) == 1 and isinstance(payload[0], (list, tuple)):
+            payload = tuple(payload[0])
         client.send_message(addr, payload)
         print(f"→ {addr} {payload}  (sent by mixer clock)", flush=True)
 
