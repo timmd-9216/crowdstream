@@ -16,7 +16,8 @@
 from pythonosc.udp_client import SimpleUDPClient
 from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
-import argparse, time, csv, random, wave, threading
+import argparse, time, csv, random, wave, threading, socket
+from collections import deque
 from typing import Any
 from pathlib import Path
 
@@ -103,6 +104,76 @@ def _row_float(row: dict, key: str) -> float | None:
         return float(v)
     except Exception:
         return None
+
+
+def _row_section_duration(row: dict) -> float | None:
+    v = _row_float(row, "duration_sectioned")
+    if v is not None:
+        return float(v)
+    b = _row_begin_cue_adj(row)
+    e = _row_end_cue_adj(row)
+    if b is None or e is None:
+        return None
+    return float(e) - float(b)
+
+
+def _percentile(values: list[float], q: float) -> float | None:
+    if not values:
+        return None
+    if q <= 0.0:
+        return min(values)
+    if q >= 1.0:
+        return max(values)
+    vals = sorted(values)
+    idx = int(round((len(vals) - 1) * q))
+    return float(vals[idx])
+
+
+def _prepare_selection_pools(rows: list[dict], seed: int | None) -> tuple[list[dict], list[dict], list[dict], float | None, float]:
+    rng = random.Random(seed)
+    durations = [d for r in rows if (d := _row_section_duration(r)) is not None and d > 0.0]
+    median_duration = _percentile(durations, 0.5) or 0.0
+    min_duration = max(0.0, 0.9 * float(median_duration))
+
+    filtered = [r for r in rows if (_row_section_duration(r) is None or _row_section_duration(r) >= min_duration)]
+
+    bpm_values = [b for r in filtered if (b := _row_float(r, "bpm")) is not None]
+    bpm_threshold = _percentile(bpm_values, 0.7)
+
+    available = list(filtered)
+    rng.shuffle(available)
+
+    high_pool: list[dict] = []
+    for r in available:
+        bpm = _row_float(r, "bpm")
+        dur = _row_section_duration(r)
+        if bpm_threshold is not None and bpm is not None and bpm >= bpm_threshold and dur is not None and dur >= min_duration:
+            high_pool.append(r)
+
+    normal_pool = [r for r in available if r not in high_pool]
+    rng.shuffle(high_pool)
+    rng.shuffle(normal_pool)
+
+    return available, high_pool, normal_pool, bpm_threshold, min_duration
+
+
+def _choose_next_row(
+    high_mode: bool,
+    available: list[dict],
+    high_pool: list[dict],
+    normal_pool: list[dict],
+) -> dict | None:
+    pool = high_pool if high_mode else normal_pool
+    row = pool.pop() if pool else (available.pop() if available else None)
+    if row is None:
+        return None
+    if row in available:
+        available.remove(row)
+    if row in high_pool:
+        high_pool.remove(row)
+    if row in normal_pool:
+        normal_pool.remove(row)
+    return row
 
 # --- Diagnostics helpers for dropped rows ---
 def _row_name(row: dict) -> str:
@@ -297,8 +368,8 @@ def main():
     parser.add_argument(
         "--movement-port",
         type=int,
-        default=57121,
-        help="Port to bind movement OSC listener (default: 57121)",
+        default=57120,
+        help="Port to bind movement OSC listener (default: 57120; matches detector config)",
     )
     parser.add_argument(
         "--movement-interval",
@@ -359,30 +430,39 @@ def main():
             print(f"  - {_row_name(row)} :: {reason}")
 
     rows = kept
-    # Build playlist table (shuffled with seed) with explicit timing columns
-    playlist = build_playlist(
-        rows,
-        seed=args.seed,
-        preload_offset=float(args.preload_offset),
-    )
+    available, high_pool, normal_pool, bpm_threshold, min_duration = _prepare_selection_pools(rows, args.seed)
+    if not available:
+        print("⚠️ No usable rows after filtering; aborting.")
+        return
 
-    # Print the first row in an easy-to-read way (requested: define columns + first row)
-    if playlist:
-        r0 = playlist[0]
-        print("\n=== FIRST ROW (operational columns) ===")
-        print(f"deck={r0.get('deck')}  load_at={float(r0.get('load_at', 0.0)):.3f}s  start_playing_at={float(r0.get('start_playing_at', 0.0)):.3f}s  "
-              f"next_song_cue={float(r0.get('next_song_cue', 0.0)):.3f}s  end_playing_at={float(r0.get('end_playing_at', 0.0)):.3f}s")
-
-    # Export playlist to CSV for inspection / debugging
-    if args.playlist_csv:
-        write_playlist_csv(playlist, args.playlist_csv)
+    if bpm_threshold is not None:
+        print(f"⚙️  High-energy pool: bpm >= {bpm_threshold:.2f}")
+    if min_duration > 0.0:
+        print(f"⚙️  Min section duration: {min_duration:.2f}s")
 
     if getattr(args, "print_playlist", False):
+        playlist = build_playlist(
+            available,
+            seed=args.seed,
+            preload_offset=float(args.preload_offset),
+        )
+        if playlist:
+            r0 = playlist[0]
+            print("\n=== FIRST ROW (operational columns) ===")
+            print(
+                f"deck={r0.get('deck')}  load_at={float(r0.get('load_at', 0.0)):.3f}s  start_playing_at={float(r0.get('start_playing_at', 0.0)):.3f}s  "
+                f"next_song_cue={float(r0.get('next_song_cue', 0.0)):.3f}s  end_playing_at={float(r0.get('end_playing_at', 0.0)):.3f}s"
+            )
+        if args.playlist_csv:
+            write_playlist_csv(playlist, args.playlist_csv)
         _print_playlist(playlist, max_rows=200)
         return
 
     # --- Playlist-driven scheduling (debug) ---
-    client = SimpleUDPClient(args.host, args.port)
+    client_host = args.host
+    if client_host in ("0.0.0.0", "::"):
+        client_host = "127.0.0.1"
+    client = SimpleUDPClient(client_host, args.port)
 
     def send(addr, *payload):
         client.send_message(addr, payload)
@@ -402,6 +482,10 @@ def main():
     stop_event = threading.Event()
     server = None
     last_sent: tuple[int, int, int] | None = None
+    movement_samples: deque[tuple[float, float]] = deque()
+    movement_mode = {"high": False}
+    movement_baseline = {"avg": None}
+    movement_start = time.monotonic()
 
     def _clamp01(v: float) -> float:
         try:
@@ -450,6 +534,17 @@ def main():
             movement_seen[name] = True
         print(f"🔊 Movement update: {name}={v:.3f} (from {address})")
 
+    class ReuseAddrOSCUDPServer(ThreadingOSCUDPServer):
+        allow_reuse_address = True
+
+        def server_bind(self) -> None:
+            if hasattr(socket, "SO_REUSEPORT"):
+                try:
+                    self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                except OSError:
+                    pass
+            super().server_bind()
+
     def start_movement_server(host: str, port: int):
         disp = Dispatcher()
         # Accept a few common address patterns
@@ -467,7 +562,7 @@ def main():
         disp.map("/legs", _make_handler("legs"))
         disp.map("/arms", _make_handler("arms"))
 
-        server = ThreadingOSCUDPServer((host, port), disp)
+        server = ReuseAddrOSCUDPServer((host, port), disp)
         t = threading.Thread(target=server.serve_forever, daemon=True)
         t.start()
         print(f"🕺 Movement OSC listener running on {host}:{port}")
@@ -486,6 +581,15 @@ def main():
             if not have_all or head is None or legs is None or arms is None:
                 time.sleep(interval)
                 continue
+
+            now = time.monotonic()
+            overall = (head + legs + arms) / 3.0
+            with movements_lock:
+                movement_samples.append((now, overall))
+                # Keep the last 2 minutes of samples
+                cutoff = now - 120.0
+                while movement_samples and movement_samples[0][0] < cutoff:
+                    movement_samples.popleft()
 
             # scale 0..1 -> 0..50
             high = int(round(50 * head))
@@ -517,7 +621,11 @@ def main():
         )
         updater.start()
     except Exception as e:
-        print(f"⚠️ Could not start movement listener/updater: {e}")
+        msg = str(e)
+        if "Address already in use" in msg or "Errno 48" in msg:
+            print("⚠️ Movement listener port in use. Either stop the other OSC server or use --movement-port to match a free port and update the detector config.")
+        else:
+            print(f"⚠️ Could not start movement listener/updater: {e}")
 
     def levels_for(decks: list[str], vols: dict[str, float]) -> tuple[float, float, float, float]:
         # Map A/B/C/D (D unused)
