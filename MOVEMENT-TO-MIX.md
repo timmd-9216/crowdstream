@@ -37,8 +37,8 @@ The mixer prints a message when it receives movement and when it applies EQ:
 
 After the first 60 seconds, the mixer computes a baseline average movement from that initial minute. It then watches the last 60 seconds:
 
-- If the last-60s average >= baseline + 0.05, **prefer high BPM**.
-- If the last-60s average <= baseline - 0.05, **prefer normal BPM**.
+- If the last-60s average >= baseline + 0.02, **prefer high BPM**.
+- If the last-60s average <= baseline - 0.02, **prefer normal BPM**.
 
 This directly affects which tracks are chosen next.
 

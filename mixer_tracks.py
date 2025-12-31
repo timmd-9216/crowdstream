@@ -397,14 +397,14 @@ def main():
     parser.add_argument(
         "--tempo-interval",
         type=float,
-        default=5.0,
-        help="Seconds between tempo updates (default: 5.0)",
+        default=30.0,
+        help="Seconds between tempo updates (default: 30.0)",
     )
     parser.add_argument(
         "--movement-threshold",
         type=float,
-        default=0.05,
-        help="Average movement delta needed to trigger high/low mode (default: 0.05)",
+        default=0.02,
+        help="Average movement delta needed to trigger high/low mode (default: 0.02)",
     )
     args = parser.parse_args()
 
@@ -687,7 +687,12 @@ def main():
                     else:
                         target = tempo_base
                     with movements_lock:
+                        prev_target = float(tempo_state["target"])
                         tempo_state["target"] = float(target)
+                    if abs(target - prev_target) > 1e-6:
+                        print(
+                            f"🎛️ Tempo target -> {target:.2f} BPM (avg={recent_avg:.3f}, baseline={baseline:.3f})"
+                        )
 
             time.sleep(check_interval)
 
@@ -709,6 +714,7 @@ def main():
                 tempo_state["current"] = float(new_bpm)
 
             send("/set_tempo", float(new_bpm))
+            print(f"🎚️ TEMPO STEP: {new_bpm:.2f} BPM (target={target:.2f})")
             time.sleep(update_interval)
 
     # Start server + updater
