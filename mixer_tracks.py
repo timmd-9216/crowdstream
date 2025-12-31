@@ -376,6 +376,36 @@ def main():
         default=0.5,
         help="Interval (s) at which movement-driven updates are sent (default: 0.5)",
     )
+    parser.add_argument(
+        "--tempo-base",
+        type=float,
+        default=120.0,
+        help="Reference tempo in BPM for movement-based adjustments (default: 120.0)",
+    )
+    parser.add_argument(
+        "--tempo-range",
+        type=float,
+        default=10.0,
+        help="Max BPM shift up/down from base based on movement (default: 10.0)",
+    )
+    parser.add_argument(
+        "--tempo-step",
+        type=float,
+        default=0.2,
+        help="BPM step size per tempo update (default: 0.2)",
+    )
+    parser.add_argument(
+        "--tempo-interval",
+        type=float,
+        default=5.0,
+        help="Seconds between tempo updates (default: 5.0)",
+    )
+    parser.add_argument(
+        "--movement-threshold",
+        type=float,
+        default=0.05,
+        help="Average movement delta needed to trigger high/low mode (default: 0.05)",
+    )
     args = parser.parse_args()
 
     rows = _read_selected_csv(args.csv)
@@ -470,6 +500,7 @@ def main():
         print(f"→ {addr} {payload}  (sent by mixer clock)", flush=True)
 
     send("/reset", [])
+    send("/set_tempo", float(args.tempo_base))
     # Start from silence / flat EQ
     send("/deck_levels", 0.0, 0.0, 0.0, 0.0)
     send("/deck_eq_all", "A", 50, 50, 50)
@@ -484,9 +515,10 @@ def main():
     server = None
     last_sent: tuple[int, int, int] | None = None
     movement_samples: deque[tuple[float, float]] = deque()
-    movement_mode = {"high": False}
+    movement_mode = {"prefer_high": False}
     movement_baseline = {"avg": None}
     movement_start = time.monotonic()
+    tempo_state = {"current": float(args.tempo_base), "target": float(args.tempo_base)}
 
     def _clamp01(v: float) -> float:
         try:
@@ -619,6 +651,10 @@ def main():
             with movements_lock:
                 samples = list(movement_samples)
                 baseline = movement_baseline["avg"]
+                prefer_high = movement_mode["prefer_high"]
+                tempo_base = float(args.tempo_base)
+                tempo_range = float(args.tempo_range)
+                threshold = float(args.movement_threshold)
 
             if baseline is None and now - movement_start >= 60.0 and samples:
                 baseline_samples = [v for t, v in samples if t - movement_start <= 60.0]
@@ -632,16 +668,48 @@ def main():
                 recent_samples = [v for t, v in samples if now - t <= 60.0]
                 if recent_samples:
                     recent_avg = sum(recent_samples) / float(len(recent_samples))
-                    with movements_lock:
-                        high_mode = movement_mode["high"]
-                    if not high_mode and recent_avg >= baseline + 0.05:
+                    if recent_avg >= baseline + threshold and not prefer_high:
                         with movements_lock:
-                            movement_mode["high"] = True
+                            movement_mode["prefer_high"] = True
                         print(
-                            f"⚡ Movement up: avg={recent_avg:.3f} baseline={baseline:.3f} -> high-energy mode ON"
+                            f"⚡ Movement up: avg={recent_avg:.3f} baseline={baseline:.3f} -> prefer HIGH bpm"
                         )
+                    elif recent_avg <= baseline - threshold and prefer_high:
+                        with movements_lock:
+                            movement_mode["prefer_high"] = False
+                        print(
+                            f"🐢 Movement low: avg={recent_avg:.3f} baseline={baseline:.3f} -> prefer NORMAL bpm"
+                        )
+                    if recent_avg >= baseline + threshold:
+                        target = tempo_base + tempo_range
+                    elif recent_avg <= baseline - threshold:
+                        target = tempo_base - tempo_range
+                    else:
+                        target = tempo_base
+                    with movements_lock:
+                        tempo_state["target"] = float(target)
 
             time.sleep(check_interval)
+
+    def tempo_adjust_thread(update_interval: float, step_bpm: float, stop_evt: threading.Event):
+        while not stop_evt.is_set():
+            with movements_lock:
+                target = float(tempo_state["target"])
+                current = float(tempo_state["current"])
+
+            if abs(target - current) < 1e-6:
+                time.sleep(update_interval)
+                continue
+
+            delta = target - current
+            step = step_bpm if abs(delta) > step_bpm else abs(delta)
+            new_bpm = current + (step if delta > 0 else -step)
+
+            with movements_lock:
+                tempo_state["current"] = float(new_bpm)
+
+            send("/set_tempo", float(new_bpm))
+            time.sleep(update_interval)
 
     # Start server + updater
     try:
@@ -658,6 +726,12 @@ def main():
             daemon=True,
         )
         trend.start()
+        tempo_thread = threading.Thread(
+            target=tempo_adjust_thread,
+            args=(float(args.tempo_interval), float(args.tempo_step), stop_event),
+            daemon=True,
+        )
+        tempo_thread.start()
     except Exception as e:
         msg = str(e)
         if "Address already in use" in msg or "Errno 48" in msg:
@@ -722,9 +796,9 @@ def main():
 
     while True:
         with movements_lock:
-            high_mode = movement_mode["high"]
+            prefer_high = movement_mode["prefer_high"]
 
-        next_row = _choose_next_row(high_mode, available, high_pool, normal_pool)
+        next_row = _choose_next_row(prefer_high, available, high_pool, normal_pool)
         if next_row is None:
             break
 
