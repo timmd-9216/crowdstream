@@ -37,8 +37,8 @@ The mixer prints a message when it receives movement and when it applies EQ:
 
 After the first 60 seconds, the mixer computes a baseline average movement from that initial minute. It then watches the last 60 seconds:
 
-- If the last-60s average >= baseline + 0.05, **high-energy mode** turns on.
-- Once high-energy mode is on, it stays on for the rest of the run.
+- If the last-60s average >= baseline + 0.05, **prefer high BPM**.
+- If the last-60s average <= baseline - 0.05, **prefer normal BPM**.
 
 This directly affects which tracks are chosen next.
 
@@ -49,7 +49,7 @@ This directly affects which tracks are chosen next.
 - The 70th percentile BPM in the CSV is used as the threshold.
 - High-energy pool = tracks with `bpm >= threshold`.
 
-When high-energy mode is ON, the mixer prefers this pool.
+When prefer-high is ON, the mixer prefers this pool.
 
 ## Avoid short sections (rule 3)
 
@@ -78,3 +78,13 @@ Example run (from `losdones-start.sh`):
 python audio_server.py --port 57122 &
 python mixer_tracks.py --host 127.0.0.1 --port 57122 --movement-port 57120 &
 ```
+
+## Tempo adjustment from movement
+
+The mixer sends `/set_tempo` to the audio server to slowly shift BPM based on movement:
+
+- Base tempo: 120 BPM by default (`--tempo-base`).
+- Range: +/-10 BPM (`--tempo-range`).
+- If movement is high, tempo drifts up toward base+range.
+- If movement is low, tempo drifts down toward base-range.
+- Tempo changes are gradual (default 0.2 BPM every 5s).
