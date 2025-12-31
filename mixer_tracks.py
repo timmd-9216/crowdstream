@@ -519,7 +519,13 @@ def main():
     movement_mode = {"prefer_high": False}
     movement_baseline = {"avg": None}
     movement_start = time.monotonic()
-    tempo_state = {"current": float(args.tempo_base), "target": float(args.tempo_base)}
+    tempo_state = {
+        "current": float(args.tempo_base),
+        "target": float(args.tempo_base),
+        "ramp_start": 0.0,
+        "ramp_from": float(args.tempo_base),
+        "ramp_to": float(args.tempo_base),
+    }
     movement_report = {"last": 0.0}
     smooth_window = 5
     movement_buffers = {
@@ -724,6 +730,10 @@ def main():
                         prev_target = float(tempo_state["target"])
                         tempo_state["target"] = float(target)
                         current_bpm = float(tempo_state["current"])
+                        if abs(target - prev_target) > 1e-6:
+                            tempo_state["ramp_start"] = float(now)
+                            tempo_state["ramp_from"] = float(current_bpm)
+                            tempo_state["ramp_to"] = float(target)
                     if abs(target - prev_target) > 1e-6:
                         print(
                             f"🎛️ Tempo target -> {target:.2f} BPM (avg={recent_avg:.3f}, baseline={baseline:.3f})"
@@ -746,20 +756,42 @@ def main():
             with movements_lock:
                 target = float(tempo_state["target"])
                 current = float(tempo_state["current"])
+                ramp_start = float(tempo_state["ramp_start"])
+                ramp_from = float(tempo_state["ramp_from"])
+                ramp_to = float(tempo_state["ramp_to"])
 
+            now = time.monotonic()
+            ramp_duration = max(1.0, float(args.tempo_interval))
             if abs(target - current) < 1e-6:
                 time.sleep(update_interval)
                 continue
 
-            delta = target - current
-            step = step_bpm if abs(delta) > step_bpm else abs(delta)
-            new_bpm = current + (step if delta > 0 else -step)
+            if ramp_to != target:
+                ramp_start = now
+                ramp_from = current
+                ramp_to = target
+                with movements_lock:
+                    tempo_state["ramp_start"] = float(ramp_start)
+                    tempo_state["ramp_from"] = float(ramp_from)
+                    tempo_state["ramp_to"] = float(ramp_to)
 
-            with movements_lock:
-                tempo_state["current"] = float(new_bpm)
+            progress = (now - ramp_start) / ramp_duration
+            if progress < 0.0:
+                progress = 0.0
+            if progress > 1.0:
+                progress = 1.0
 
-            send("/set_tempo", float(new_bpm))
-            print(f"🎚️ TEMPO STEP: {new_bpm:.2f} BPM (target={target:.2f})")
+            new_bpm = ramp_from + (ramp_to - ramp_from) * progress
+            # Snap when close enough to avoid tiny oscillations
+            if abs(new_bpm - target) < 0.01:
+                new_bpm = target
+
+            if abs(new_bpm - current) >= step_bpm or new_bpm == target:
+                with movements_lock:
+                    tempo_state["current"] = float(new_bpm)
+                send("/set_tempo", float(new_bpm))
+                print(f"🎚️ TEMPO STEP: {new_bpm:.2f} BPM (target={target:.2f})")
+
             time.sleep(update_interval)
 
     # Start server + updater
@@ -779,7 +811,7 @@ def main():
         trend.start()
         tempo_thread = threading.Thread(
             target=tempo_adjust_thread,
-            args=(float(args.tempo_interval), float(args.tempo_step), stop_event),
+            args=(1.0, float(args.tempo_step), stop_event),
             daemon=True,
         )
         tempo_thread.start()

@@ -86,4 +86,4 @@ The mixer sends `/set_tempo` to the audio server to slowly shift BPM based on mo
 - Range: +/-10 BPM (`--tempo-range`).
 - If movement is high, tempo drifts up toward base+range.
 - If movement is low, tempo drifts down toward base-range.
-- Tempo changes are gradual (default 0.2 BPM every 30s).
+- Tempo changes are gradual and linear over the next 30s when the target changes (default step logs every 1s).
