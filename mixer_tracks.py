@@ -565,7 +565,7 @@ def main():
                 movement_seen[name] = True
                 movement_buffers[name].append(v)
                 movement_msg_count["since_apply"] += 1
-            print(f"🔊 Movement update: {name}={v:.3f} (from {address})")
+            # Raw movement messages are noisy; report only averaged updates.
         return _handler
 
     def _wildcard_handler(address, *args):
@@ -578,7 +578,7 @@ def main():
             movement_seen[name] = True
             movement_buffers[name].append(v)
             movement_msg_count["since_apply"] += 1
-        print(f"🔊 Movement update: {name}={v:.3f} (from {address})")
+        # Raw movement messages are noisy; report only averaged updates.
 
     class ReuseAddrOSCUDPServer(ThreadingOSCUDPServer):
         allow_reuse_address = True
@@ -669,7 +669,10 @@ def main():
             with movements_lock:
                 movement_msg_count["since_apply"] = 0
             last_sent = current
-            print(f"🎚️ Applied movement EQ: low={low} mid={mid} high={high} (avg over {smooth_window} msgs)")
+            print(
+                f"🎚️ Applied movement EQ: low={low} mid={mid} high={high} "
+                f"(avg over {smooth_window} msgs: head={head_avg:.3f} arms={arms_avg:.3f} legs={legs_avg:.3f})"
+            )
 
             time.sleep(interval)
 
@@ -731,10 +734,10 @@ def main():
                             current_bpm = float(tempo_state["current"])
                         gap = target - current_bpm
                         delta = recent_avg - baseline
-                        print(
-                            f"📈 Movement avg60={recent_avg:.3f} baseline={baseline:.3f} Δ={delta:+.3f} thr=±{threshold:.3f} "
-                            f"tempo={current_bpm:.2f} target={target:.2f} gap={gap:+.2f}"
-                        )
+                        print("\n\n"
+                              f"📈 Movement avg60={recent_avg:.3f} baseline={baseline:.3f} Δ={delta:+.3f} thr=±{threshold:.3f} "
+                              f"tempo={current_bpm:.2f} target={target:.2f} gap={gap:+.2f}"
+                              "\n\n")
 
             time.sleep(check_interval)
 

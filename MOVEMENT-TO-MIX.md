@@ -28,10 +28,9 @@ Values are scaled to `0..50` and sent as:
 /deck_eq_all <deck> <low> <mid> <high>
 ```
 
-The mixer prints a message when it receives movement and when it applies EQ:
+The mixer prints a message when it applies EQ:
 
-- `🔊 Movement update: head=... (from /dance/...)`
-- `🎚️ Applied movement EQ: low=.. mid=.. high=..`
+- `🎚️ Applied movement EQ: low=.. mid=.. high=.. (avg over 5 msgs: head=.. arms=.. legs=..)`
 
 ## Movement trend -> track selection
 
