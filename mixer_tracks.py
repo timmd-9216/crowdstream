@@ -501,6 +501,7 @@ def main():
 
     send("/reset", [])
     send("/set_tempo", float(args.tempo_base))
+    print(f"🎚️ Tempo init -> {float(args.tempo_base):.2f} BPM")
     # Start from silence / flat EQ
     send("/deck_levels", 0.0, 0.0, 0.0, 0.0)
     send("/deck_eq_all", "A", 50, 50, 50)
@@ -519,6 +520,14 @@ def main():
     movement_baseline = {"avg": None}
     movement_start = time.monotonic()
     tempo_state = {"current": float(args.tempo_base), "target": float(args.tempo_base)}
+    movement_report = {"last": 0.0}
+    smooth_window = 5
+    movement_buffers = {
+        "head": deque(maxlen=smooth_window),
+        "legs": deque(maxlen=smooth_window),
+        "arms": deque(maxlen=smooth_window),
+    }
+    movement_msg_count = {"since_apply": 0}
 
     def _clamp01(v: float) -> float:
         try:
@@ -554,6 +563,8 @@ def main():
             with movements_lock:
                 movements[name] = v
                 movement_seen[name] = True
+                movement_buffers[name].append(v)
+                movement_msg_count["since_apply"] += 1
             print(f"🔊 Movement update: {name}={v:.3f} (from {address})")
         return _handler
 
@@ -565,6 +576,8 @@ def main():
         with movements_lock:
             movements[name] = v
             movement_seen[name] = True
+            movement_buffers[name].append(v)
+            movement_msg_count["since_apply"] += 1
         print(f"🔊 Movement update: {name}={v:.3f} (from {address})")
 
     class ReuseAddrOSCUDPServer(ThreadingOSCUDPServer):
@@ -610,6 +623,10 @@ def main():
                 legs = movements.get("legs")
                 arms = movements.get("arms")
                 have_all = all(movement_seen.values())
+                count_since_apply = movement_msg_count["since_apply"]
+                head_buf = list(movement_buffers["head"])
+                legs_buf = list(movement_buffers["legs"])
+                arms_buf = list(movement_buffers["arms"])
 
             if not have_all or head is None or legs is None or arms is None:
                 time.sleep(interval)
@@ -624,12 +641,22 @@ def main():
                 while movement_samples and movement_samples[0][0] < cutoff:
                     movement_samples.popleft()
 
+            if count_since_apply < smooth_window:
+                time.sleep(interval)
+                continue
+
+            head_avg = sum(head_buf) / float(len(head_buf)) if head_buf else head
+            legs_avg = sum(legs_buf) / float(len(legs_buf)) if legs_buf else legs
+            arms_avg = sum(arms_buf) / float(len(arms_buf)) if arms_buf else arms
+
             # scale 0..1 -> 0..50
-            high = int(round(50 * head))
-            low = int(round(50 * legs))
-            mid = int(round(50 * arms))
+            high = int(round(50 * head_avg))
+            low = int(round(50 * legs_avg))
+            mid = int(round(50 * arms_avg))
             current = (low, mid, high)
             if last_sent is not None and current == last_sent:
+                with movements_lock:
+                    movement_msg_count["since_apply"] = 0
                 time.sleep(interval)
                 continue
 
@@ -639,8 +666,10 @@ def main():
                     client.send_message("/deck_eq_all", [deck, low, mid, high])
                 except Exception:
                     pass
+            with movements_lock:
+                movement_msg_count["since_apply"] = 0
             last_sent = current
-            print(f"🎚️ Applied movement EQ: low={low} mid={mid} high={high}")
+            print(f"🎚️ Applied movement EQ: low={low} mid={mid} high={high} (avg over {smooth_window} msgs)")
 
             time.sleep(interval)
 
@@ -668,6 +697,8 @@ def main():
                 recent_samples = [v for t, v in samples if now - t <= 60.0]
                 if recent_samples:
                     recent_avg = sum(recent_samples) / float(len(recent_samples))
+                    with movements_lock:
+                        last_report = float(movement_report["last"])
                     if recent_avg >= baseline + threshold and not prefer_high:
                         with movements_lock:
                             movement_mode["prefer_high"] = True
@@ -689,9 +720,20 @@ def main():
                     with movements_lock:
                         prev_target = float(tempo_state["target"])
                         tempo_state["target"] = float(target)
+                        current_bpm = float(tempo_state["current"])
                     if abs(target - prev_target) > 1e-6:
                         print(
                             f"🎛️ Tempo target -> {target:.2f} BPM (avg={recent_avg:.3f}, baseline={baseline:.3f})"
+                        )
+                    if now - last_report >= 30.0:
+                        with movements_lock:
+                            movement_report["last"] = float(now)
+                            current_bpm = float(tempo_state["current"])
+                        gap = target - current_bpm
+                        delta = recent_avg - baseline
+                        print(
+                            f"📈 Movement avg60={recent_avg:.3f} baseline={baseline:.3f} Δ={delta:+.3f} thr=±{threshold:.3f} "
+                            f"tempo={current_bpm:.2f} target={target:.2f} gap={gap:+.2f}"
                         )
 
             time.sleep(check_interval)
