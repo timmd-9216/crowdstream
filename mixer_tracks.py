@@ -14,7 +14,9 @@
 # - If /deck_eq is unhandled, messages are harmless no-ops.
 
 from pythonosc.udp_client import SimpleUDPClient
-import argparse, time, csv, random, wave
+from pythonosc.dispatcher import Dispatcher
+from pythonosc.osc_server import ThreadingOSCUDPServer
+import argparse, time, csv, random, wave, threading
 from typing import Any
 from pathlib import Path
 
@@ -287,6 +289,23 @@ def main():
         default="playlist_operational.csv",
         help="Write the computed operational playlist to this CSV file (default: playlist_operational.csv).",
     )
+    parser.add_argument(
+        "--movement-host",
+        default="0.0.0.0",
+        help="Host to bind movement OSC listener (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--movement-port",
+        type=int,
+        default=57121,
+        help="Port to bind movement OSC listener (default: 57121)",
+    )
+    parser.add_argument(
+        "--movement-interval",
+        type=float,
+        default=0.5,
+        help="Interval (s) at which movement-driven updates are sent (default: 0.5)",
+    )
     args = parser.parse_args()
 
     rows = _read_selected_csv(args.csv)
@@ -376,6 +395,130 @@ def main():
     send("/deck_eq_all", "B", 50, 50, 50)
     send("/deck_eq_all", "C", 50, 50, 50)
 
+    # --- Movement OSC receiver + updater ---
+    movements: dict[str, float | None] = {"head": None, "legs": None, "arms": None}
+    movement_seen = {"head": False, "legs": False, "arms": False}
+    movements_lock = threading.Lock()
+    stop_event = threading.Event()
+    server = None
+    last_sent: tuple[int, int, int] | None = None
+
+    def _clamp01(v: float) -> float:
+        try:
+            f = float(v)
+        except Exception:
+            return 0.0
+        if f > 1.0 and f <= 100.0:
+            f = f / 100.0
+        if f < 0.0:
+            return 0.0
+        if f > 1.0:
+            return 1.0
+        return f
+
+    def _infer_movement_name(address: str) -> str | None:
+        tokens = []
+        for chunk in address.lower().replace("-", "_").split("/"):
+            tokens.extend(chunk.split("_"))
+        if "head" in tokens:
+            return "head"
+        if "legs" in tokens or "leg" in tokens:
+            return "legs"
+        if "arms" in tokens or "arm" in tokens:
+            return "arms"
+        return None
+
+    def _make_handler(name: str):
+        def _handler(address, *args):
+            # Expect first argument to be a float-like movement strength (0..1)
+            if len(args) < 1:
+                return
+            v = _clamp01(args[0])
+            with movements_lock:
+                movements[name] = v
+                movement_seen[name] = True
+            print(f"🔊 Movement update: {name}={v:.3f} (from {address})")
+        return _handler
+
+    def _wildcard_handler(address, *args):
+        name = _infer_movement_name(address)
+        if not name or len(args) < 1:
+            return
+        v = _clamp01(args[0])
+        with movements_lock:
+            movements[name] = v
+            movement_seen[name] = True
+        print(f"🔊 Movement update: {name}={v:.3f} (from {address})")
+
+    def start_movement_server(host: str, port: int):
+        disp = Dispatcher()
+        # Accept a few common address patterns
+        disp.map("/dance/head", _make_handler("head"))
+        disp.map("/dance/legs", _make_handler("legs"))
+        disp.map("/dance/arms", _make_handler("arms"))
+        disp.map("/dance/head_movement", _make_handler("head"))
+        disp.map("/dance/legs_movement", _make_handler("legs"))
+        disp.map("/dance/arms_movement", _make_handler("arms"))
+        disp.map("/dance/*movement", _wildcard_handler)
+        disp.map("/movement/head", _make_handler("head"))
+        disp.map("/movement/legs", _make_handler("legs"))
+        disp.map("/movement/arms", _make_handler("arms"))
+        disp.map("/head", _make_handler("head"))
+        disp.map("/legs", _make_handler("legs"))
+        disp.map("/arms", _make_handler("arms"))
+
+        server = ThreadingOSCUDPServer((host, port), disp)
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        print(f"🕺 Movement OSC listener running on {host}:{port}")
+        return server
+
+    def movement_updater_thread(client: SimpleUDPClient, interval: float, stop_evt: threading.Event):
+        nonlocal last_sent
+        # Map movements -> EQ bands: legs -> low, arms -> mid, head -> high
+        while not stop_evt.is_set():
+            with movements_lock:
+                head = movements.get("head")
+                legs = movements.get("legs")
+                arms = movements.get("arms")
+                have_all = all(movement_seen.values())
+
+            if not have_all or head is None or legs is None or arms is None:
+                time.sleep(interval)
+                continue
+
+            # scale 0..1 -> 0..50
+            high = int(round(50 * head))
+            low = int(round(50 * legs))
+            mid = int(round(50 * arms))
+            current = (low, mid, high)
+            if last_sent is not None and current == last_sent:
+                time.sleep(interval)
+                continue
+
+            # Send gentle EQ updates for each deck (A/B/C)
+            for deck in ("A", "B", "C"):
+                try:
+                    client.send_message("/deck_eq_all", [deck, low, mid, high])
+                except Exception:
+                    pass
+            last_sent = current
+            print(f"🎚️ Applied movement EQ: low={low} mid={mid} high={high}")
+
+            time.sleep(interval)
+
+    # Start server + updater
+    try:
+        server = start_movement_server(args.movement_host, args.movement_port)
+        updater = threading.Thread(
+            target=movement_updater_thread,
+            args=(client, float(args.movement_interval), stop_event),
+            daemon=True,
+        )
+        updater.start()
+    except Exception as e:
+        print(f"⚠️ Could not start movement listener/updater: {e}")
+
     def levels_for(decks: list[str], vols: dict[str, float]) -> tuple[float, float, float, float]:
         # Map A/B/C/D (D unused)
         return (
@@ -458,6 +601,15 @@ def main():
         if target > now:
             time.sleep(target - now)
         send(addr, *payload)
+
+    # Finished scheduling; give movement updater a moment then stop it
+    stop_event.set()
+    try:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+    except Exception:
+        pass
 
     print("✅ Scheduled playlist cue/start + crossfades (deck_levels + eq).")
     return

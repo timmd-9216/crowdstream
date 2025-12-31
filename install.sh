@@ -14,9 +14,22 @@ if [ -d "venv" ]; then
     rm -rf venv
 fi
 
-# Create venv
-echo "  Creating virtual environment..."
-python3 -m venv venv
+# Create venv (prefer python3.13 if available)
+echo "  Creating virtual environment (prefer python3.13 if available)..."
+PY_CMD=""
+if command -v python3.13 >/dev/null 2>&1; then
+    PY_CMD=python3.13
+elif command -v python3 >/dev/null 2>&1; then
+    PY_CMD=python3
+elif command -v python >/dev/null 2>&1; then
+    PY_CMD=python
+else
+    echo "  ❌ No Python interpreter found (python3.13/python3/python). Install Python 3.13 or ensure 'python3' is on PATH." >&2
+    exit 1
+fi
+
+echo "  Using: $PY_CMD"
+$PY_CMD -m venv venv
 
 # Upgrade pip
 echo "  Upgrading pip..."
