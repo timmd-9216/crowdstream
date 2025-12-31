@@ -534,6 +534,7 @@ def main():
         "arms": deque(maxlen=smooth_window),
     }
     movement_msg_count = {"since_apply": 0}
+    movement_apply_count = {"total": 0}
 
     def _clamp01(v: float) -> float:
         try:
@@ -674,11 +675,14 @@ def main():
                     pass
             with movements_lock:
                 movement_msg_count["since_apply"] = 0
+                movement_apply_count["total"] += 1
+                apply_count = movement_apply_count["total"]
             last_sent = current
-            print(
-                f"🎚️ Applied movement EQ: low={low} mid={mid} high={high} "
-                f"(avg over {smooth_window} msgs: head={head_avg:.3f} arms={arms_avg:.3f} legs={legs_avg:.3f})"
-            )
+            if apply_count % 5 == 0:
+                print(
+                    f"🎚️ Applied movement EQ: low={low} mid={mid} high={high} "
+                    f"(avg over {smooth_window} msgs: head={head_avg:.3f} arms={arms_avg:.3f} legs={legs_avg:.3f})"
+                )
 
             time.sleep(interval)
 
@@ -725,7 +729,8 @@ def main():
                     elif recent_avg <= baseline - threshold:
                         target = tempo_base - tempo_range
                     else:
-                        target = tempo_base
+                        # If movement stays near baseline, slowly drift down.
+                        target = tempo_base - tempo_range
                     with movements_lock:
                         prev_target = float(tempo_state["target"])
                         tempo_state["target"] = float(target)
