@@ -389,6 +389,12 @@ def main():
         help="Max BPM shift up/down from base based on movement (default: 10.0)",
     )
     parser.add_argument(
+        "--tempo-scale",
+        type=float,
+        default=20.0,
+        help="BPM change per 1.0 movement delta (default: 20.0)",
+    )
+    parser.add_argument(
         "--tempo-step",
         type=float,
         default=0.2,
@@ -696,6 +702,7 @@ def main():
                 prefer_high = movement_mode["prefer_high"]
                 tempo_base = float(args.tempo_base)
                 tempo_range = float(args.tempo_range)
+                tempo_scale = float(args.tempo_scale)
                 threshold = float(args.movement_threshold)
 
             if baseline is None and now - movement_start >= 60.0 and samples:
@@ -724,13 +731,9 @@ def main():
                         print(
                             f"🐢 Movement low: avg={recent_avg:.3f} baseline={baseline:.3f} -> prefer NORMAL bpm"
                         )
-                    if recent_avg >= baseline + threshold:
-                        target = tempo_base + tempo_range
-                    elif recent_avg <= baseline - threshold:
-                        target = tempo_base - tempo_range
-                    else:
-                        # If movement stays near baseline, slowly drift down.
-                        target = tempo_base - tempo_range
+                    delta = recent_avg - baseline
+                    target_shift = max(-tempo_range, min(tempo_range, delta * tempo_scale))
+                    target = tempo_base + target_shift
                     with movements_lock:
                         prev_target = float(tempo_state["target"])
                         tempo_state["target"] = float(target)

@@ -20,6 +20,10 @@ from pathlib import Path
 from typing import Dict, Optional, Any, Tuple, Union
 
 import numpy as np
+try:
+    import pyrubberband as pyrb
+except Exception:  # pragma: no cover - optional dependency
+    pyrb = None
 import pyaudio
 import soundfile as sf
 from pythonosc import dispatcher
@@ -373,7 +377,7 @@ class PythonAudioServer:
     #   D: 3100–4099
 
     def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024,
-                 enable_filters: bool = False, use_optimized_filters: bool = False):
+                 enable_filters: bool = False, use_optimized_filters: bool = False, enable_time_stretch: bool = True):
         self.osc_port = osc_port
         self.sample_rate = 44100
         self.chunk_size = chunk_size  # Default 1024 for Raspberry Pi stability
@@ -407,6 +411,14 @@ class PythonAudioServer:
         }
 
         self.clock = TempoClock()
+        self.base_bpm = 120.0
+        self.time_stretch_ratio = 1.0
+        self.enable_time_stretch = enable_time_stretch and pyrb is not None
+        self._time_stretch_warned = False
+        if enable_time_stretch and pyrb is None:
+            print("⚠️  pyrubberband not available; time-stretch disabled.")
+        if self.enable_time_stretch:
+            print("🎛️  Time-stretch: ENABLED (pyrubberband)")
         # Meter / clock print configuration
         self.meter_beats = 4  # beats per bar (e.g., 4 for 4/4)
         self.print_clock = False
@@ -463,6 +475,26 @@ class PythonAudioServer:
             self.audio_thread.start()
         except Exception as exc:  # pragma: no cover - runtime diagnostic
             print(f"❌ Failed to open audio stream: {exc}")
+
+    def _apply_time_stretch(self, mix: np.ndarray, ratio: float) -> np.ndarray:
+        if not self.enable_time_stretch or pyrb is None:
+            return mix
+        if abs(ratio - 1.0) < 0.001:
+            return mix
+        try:
+            stretched = pyrb.time_stretch(mix, self.sample_rate, ratio)
+            if stretched.shape[0] < self.chunk_size:
+                pad = np.zeros((self.chunk_size - stretched.shape[0], stretched.shape[1]), dtype=np.float32)
+                stretched = np.vstack((stretched, pad))
+            elif stretched.shape[0] > self.chunk_size:
+                stretched = stretched[: self.chunk_size]
+            return stretched.astype(np.float32)
+        except Exception as exc:  # pragma: no cover - runtime diagnostic
+            if not self._time_stretch_warned:
+                print(f"⚠️  Time-stretch failed; disabling. ({exc})")
+                self._time_stretch_warned = True
+            self.enable_time_stretch = False
+            return mix
 
     def audio_loop(self) -> None:
         """Audio processing loop that mixes all active players."""
@@ -527,6 +559,7 @@ class PythonAudioServer:
                     deck_d_mix * self.deck_d_volume
                 ) * self.master_volume
                 final_mix = np.tanh(final_mix * 0.9) * 0.9
+                final_mix = self._apply_time_stretch(final_mix, self.time_stretch_ratio)
 
                 if self.stream and self.stream.is_active():
                     self.stream.write(final_mix.astype(np.float32).tobytes())
@@ -1154,6 +1187,8 @@ class PythonAudioServer:
         try:
             bpm = float(args[0])
             self.clock.bpm = bpm
+            if self.base_bpm > 0:
+                self.time_stretch_ratio = float(bpm) / float(self.base_bpm)
             print(f"⏱️  Tempo set to {bpm:.2f} BPM")
         except Exception as exc:  # pragma: no cover - runtime diagnostic
             print(f"❌ Error setting tempo: {exc}")
@@ -1212,6 +1247,7 @@ def main() -> None:
     parser.add_argument("--enable-filters", action="store_true", help="Enable 3-band EQ filters (CPU-intensive, disabled by default on Raspberry Pi)")
     parser.add_argument("--optimized-filters", action="store_true", help="Use scipy-based optimized filters (50-100x faster, requires scipy)")
     parser.add_argument("--bpm", type=float, default=120.0, help="Initial tempo in BPM")
+    parser.add_argument("--disable-time-stretch", action="store_true", help="Disable real-time time-stretch")
     parser.add_argument("--a", type=str, help="Path to audio file for Deck A (buffer 100)")
     parser.add_argument("--b", type=str, help="Path to audio file for Deck B (buffer 1100)")
     parser.add_argument("--rate", type=float, default=1.0, help="Playback rate for autoplay")
@@ -1238,9 +1274,12 @@ def main() -> None:
         audio_device=args.device,
         chunk_size=args.buffer_size,
         enable_filters=args.enable_filters,
-        use_optimized_filters=args.optimized_filters
+        use_optimized_filters=args.optimized_filters,
+        enable_time_stretch=not args.disable_time_stretch,
     )
     server.clock.bpm = args.bpm
+    server.base_bpm = args.bpm
+    server.time_stretch_ratio = 1.0
     server.print_clock = bool(args.watch)
     server.meter_beats = int(args.meter) if args.meter and args.meter > 0 else 4
     server_thread = server.start()

@@ -84,7 +84,32 @@ The mixer sends `/set_tempo` to the audio server to slowly shift BPM based on mo
 
 - Base tempo: 120 BPM by default (`--tempo-base`).
 - Range: +/-10 BPM (`--tempo-range`).
-- If movement is high, tempo drifts up toward base+range.
-- If movement is low, tempo drifts down toward base-range.
-- If movement stays near baseline, tempo also drifts down toward base-range.
+- Target is proportional to the movement delta: `target = base + clamp(delta * tempo_scale, -range, +range)`.
+- Default `tempo_scale` is 20 BPM per 1.0 movement delta (`--tempo-scale 20`).
 - Tempo changes are gradual and linear over the next 30s when the target changes (default step logs every 1s).
+
+## Options for audible time-stretch (Python)
+
+Right now `/set_tempo` only changes the internal clock. To make tempo changes audible, we need time-stretch.
+
+Options (Python):
+
+1) **Real-time time-stretch (best quality, heavier CPU)**
+   - Library: `pyrubberband` (requires Rubber Band CLI/library installed).
+   - Install (macOS): `brew install rubberband` and `pip install pyrubberband`.
+   - Implemented: global time-stretch on the final mix each audio chunk using the target BPM ratio.
+   - Enabled by default when `pyrubberband` is available (use `--disable-time-stretch` to turn off).
+   - Pros: best quality, can change while playing.
+   - Cons: CPU heavy, extra native dependency.
+
+2) **On-load pre-processing (lighter CPU, not real-time)**
+   - Library: `librosa` (phase vocoder) or `pyrubberband`.
+   - Stretch audio once when loading the buffer.
+   - Pros: simpler runtime, lower CPU while playing.
+   - Cons: not continuous; needs re-processing if tempo changes again.
+
+3) **Lightweight real-time approximation (lowest quality)**
+   - Library: `soundtouch` Python bindings.
+   - Faster, but can introduce artifacts at bigger shifts.
+
+Let me know which option to implement and I’ll wire it into `audio_server.py`.
