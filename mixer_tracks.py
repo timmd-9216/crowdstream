@@ -18,7 +18,6 @@ from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
 import argparse, time, csv, random, wave, threading, socket
 from collections import deque
-from typing import Any
 from pathlib import Path
 
 BPM_REF = 122.5  # Reference only; not used for playback timing.
@@ -611,6 +610,37 @@ def main():
 
             time.sleep(interval)
 
+    def movement_trend_thread(check_interval: float, stop_evt: threading.Event):
+        # After 60s, compare the last 60s average to the baseline (first minute).
+        while not stop_evt.is_set():
+            now = time.monotonic()
+            with movements_lock:
+                samples = list(movement_samples)
+                baseline = movement_baseline["avg"]
+
+            if baseline is None and now - movement_start >= 60.0 and samples:
+                baseline_samples = [v for t, v in samples if t - movement_start <= 60.0]
+                if baseline_samples:
+                    baseline = sum(baseline_samples) / float(len(baseline_samples))
+                    with movements_lock:
+                        movement_baseline["avg"] = baseline
+                    print(f"📊 Movement baseline (first 60s): {baseline:.3f}")
+
+            if baseline is not None and samples:
+                recent_samples = [v for t, v in samples if now - t <= 60.0]
+                if recent_samples:
+                    recent_avg = sum(recent_samples) / float(len(recent_samples))
+                    with movements_lock:
+                        high_mode = movement_mode["high"]
+                    if not high_mode and recent_avg >= baseline + 0.05:
+                        with movements_lock:
+                            movement_mode["high"] = True
+                        print(
+                            f"⚡ Movement up: avg={recent_avg:.3f} baseline={baseline:.3f} -> high-energy mode ON"
+                        )
+
+            time.sleep(check_interval)
+
     # Start server + updater
     try:
         server = start_movement_server(args.movement_host, args.movement_port)
@@ -620,6 +650,12 @@ def main():
             daemon=True,
         )
         updater.start()
+        trend = threading.Thread(
+            target=movement_trend_thread,
+            args=(5.0, stop_event),
+            daemon=True,
+        )
+        trend.start()
     except Exception as e:
         msg = str(e)
         if "Address already in use" in msg or "Errno 48" in msg:
@@ -636,79 +672,110 @@ def main():
             float(vols.get("D", 0.0)),
         )
 
-    # Build timed events for cue + start (no stop_group; use deck_levels=0 instead)
-    events: list[tuple[float, str, tuple[Any, ...]]] = []
-    for i, r in enumerate(playlist):
-        deck = r["deck"]
-        track = r["part_file"]
-        t_load = float(r["load_at"])
-        t_start = float(r["start_playing_at"])
-        events.append((t_load, "/cue", (deck, track, 0.0)))
+    playlist: list[dict] = []
 
-        # If this is not the first track, it starts at the exact moment a crossfade window begins.
-        # Ensure deck_levels keyframes at t_start are applied BEFORE starting the new deck.
-        t_start_send = t_start if i == 0 else (t_start + 0.0005)
-        events.append((t_start_send, "/start_group", (0.0, deck)))
+    def _append_playlist_row(row: dict, deck: str, load_at: float, start_at: float) -> None:
+        b = float(_safe_float_from_row(row, "begin_cue_adj", default=0.0) or 0.0)
+        e = float(_safe_float_from_row(row, "end_cue_adj", default=0.0) or 0.0)
+        rr = dict(row)
+        rr["deck"] = deck
+        rr["load_at"] = float(load_at)
+        rr["start_playing_at"] = float(start_at)
+        rr["next_song_cue"] = float(start_at) + float(b)
+        rr["end_playing_at"] = float(start_at) + float(e)
+        playlist.append(rr)
 
-        # Only the first track needs an explicit "audible now" level (others fade in during the window).
-        if i == 0:
-            events.append((t_start + 0.002, "/deck_levels", (1.0, 0.0, 0.0, 0.0)))
-
-    # Timeline end
-    t_end_all = float(playlist[-1]["end_playing_at"]) if playlist else 0.0
-    print(f"\n⏹️  Playlist will finish at t={t_end_all:.3f}s (relative).")
-
-    # Crossfade config
-    FADE_STEPS = 40  # smooth enough without spamming too hard
-
-    # Precompute all fade keyframes (deck_levels + optional EQ shaping) as timed events
-    vols: dict[str, float] = {"A": 0.0, "B": 0.0, "C": 0.0, "D": 0.0}
-
-    for i in range(len(playlist)):
-        cur = playlist[i]
-        cur_deck = str(cur["deck"])
-        t_start = float(cur["start_playing_at"])
-        t_cue = float(cur["next_song_cue"])
-        t_end = float(cur["end_playing_at"])
-
-        # If there is a next track, crossfade between t_cue and t_end
-        if i + 1 < len(playlist):
-            nxt = playlist[i + 1]
-            nxt_deck = str(nxt["deck"])
-
-            fade_dur = max(0.001, t_end - t_cue)
-            for s in range(FADE_STEPS + 1):
-                a = s / FADE_STEPS
-                t = t_cue + a * fade_dur
-
-                # Volumes: out 1->0, in 0->1
-                out_v = 1.0 - a
-                in_v = a
-                lv = {**vols}
-                lv[cur_deck] = out_v
-                lv[nxt_deck] = in_v
-                events.append((t, "/deck_levels", levels_for(["A", "B", "C", "D"], lv)))
-
-                # EQ crossfade: outgoing 50/50/50 -> 0/0/0, incoming 0/0/0 -> 50/50/50
-                out_band = int(round(50 * (1.0 - a)))
-                in_band = int(round(50 * a))
-                events.append((t, "/deck_eq_all", (cur_deck, out_band, out_band, out_band)))
-                events.append((t, "/deck_eq_all", (nxt_deck, in_band, in_band, in_band)))
-
-            # Lock final state: outgoing silent, incoming fully up
-            events.append((t_end + 0.001, "/deck_levels", levels_for(["A", "B", "C", "D"], {**vols, cur_deck: 0.0, nxt_deck: 1.0})))
-        else:
-            # Last track: just mute all at end (explicit)
-            events.append((t_end + 0.001, "/deck_levels", (0.0, 0.0, 0.0, 0.0)))
-
-    # Run the schedule using the mixer's clock
-    t0 = time.monotonic()
-    for t_rel, addr, payload in sorted(events, key=lambda x: x[0]):
+    def _sleep_until(t_rel: float, t0: float) -> None:
         target = t0 + float(t_rel)
         now = time.monotonic()
         if target > now:
             time.sleep(target - now)
-        send(addr, *payload)
+
+    # Crossfade config
+    FADE_STEPS = 40  # smooth enough without spamming too hard
+    vols: dict[str, float] = {"A": 0.0, "B": 0.0, "C": 0.0, "D": 0.0}
+
+    t0 = time.monotonic()
+    cur_index = 0
+    cur_row = _choose_next_row(False, available, high_pool, normal_pool)
+    if cur_row is None:
+        print("⚠️ No tracks available to schedule.")
+        return
+
+    cur_deck = _deck_for_index(cur_index)
+    cur_start = float(args.preload_offset)
+    cur_load = max(0.0, cur_start - float(args.preload_offset))
+    cur_begin = float(_safe_float_from_row(cur_row, "begin_cue_adj", default=0.0) or 0.0)
+    cur_end = float(_safe_float_from_row(cur_row, "end_cue_adj", default=0.0) or 0.0)
+    cur_cue = cur_start + cur_begin
+    cur_end_at = cur_start + cur_end
+
+    send("/cue", cur_deck, cur_row["part_file"], 0.0)
+    _append_playlist_row(cur_row, cur_deck, cur_load, cur_start)
+
+    _sleep_until(cur_start, t0)
+    send("/start_group", 0.0, cur_deck)
+    send("/deck_levels", 1.0, 0.0, 0.0, 0.0)
+    vols[cur_deck] = 1.0
+
+    while True:
+        with movements_lock:
+            high_mode = movement_mode["high"]
+
+        next_row = _choose_next_row(high_mode, available, high_pool, normal_pool)
+        if next_row is None:
+            break
+
+        next_deck = _deck_for_index(cur_index + 1)
+        next_start = cur_cue
+        next_load = max(0.0, next_start - float(args.preload_offset))
+        next_begin = float(_safe_float_from_row(next_row, "begin_cue_adj", default=0.0) or 0.0)
+        next_end = float(_safe_float_from_row(next_row, "end_cue_adj", default=0.0) or 0.0)
+        next_cue = next_start + next_begin
+        next_end_at = next_start + next_end
+
+        _sleep_until(next_load, t0)
+        send("/cue", next_deck, next_row["part_file"], 0.0)
+        _append_playlist_row(next_row, next_deck, next_load, next_start)
+
+        fade_dur = max(0.001, cur_end_at - cur_cue)
+        started = False
+        for s in range(FADE_STEPS + 1):
+            a = s / FADE_STEPS
+            t = cur_cue + a * fade_dur
+            _sleep_until(t, t0)
+
+            if not started and t >= cur_cue + 0.0005:
+                send("/start_group", 0.0, next_deck)
+                started = True
+
+            out_v = 1.0 - a
+            in_v = a
+            lv = {**vols}
+            lv[cur_deck] = out_v
+            lv[next_deck] = in_v
+            send("/deck_levels", levels_for(["A", "B", "C", "D"], lv))
+
+            out_band = int(round(50 * (1.0 - a)))
+            in_band = int(round(50 * a))
+            send("/deck_eq_all", cur_deck, out_band, out_band, out_band)
+            send("/deck_eq_all", next_deck, in_band, in_band, in_band)
+
+        vols[cur_deck] = 0.0
+        vols[next_deck] = 1.0
+        send("/deck_levels", levels_for(["A", "B", "C", "D"], {**vols, cur_deck: 0.0, next_deck: 1.0}))
+
+        cur_index += 1
+        cur_row = next_row
+        cur_deck = next_deck
+        cur_start = next_start
+        cur_begin = next_begin
+        cur_end = next_end
+        cur_cue = next_cue
+        cur_end_at = next_end_at
+
+    _sleep_until(cur_end_at + 0.001, t0)
+    send("/deck_levels", 0.0, 0.0, 0.0, 0.0)
 
     # Finished scheduling; give movement updater a moment then stop it
     stop_event.set()
@@ -719,7 +786,10 @@ def main():
     except Exception:
         pass
 
-    print("✅ Scheduled playlist cue/start + crossfades (deck_levels + eq).")
+    if args.playlist_csv:
+        write_playlist_csv(playlist, args.playlist_csv)
+
+    print("✅ Scheduled adaptive playlist cue/start + crossfades (deck_levels + eq).")
     return
 
     row_a, row_b, row_c = _pick_three_rows(rows, seed=args.seed)
