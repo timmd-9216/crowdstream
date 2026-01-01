@@ -490,14 +490,14 @@ class PythonAudioServer:
         # Using 0.6 as max for normalization to match detector's typical range
         self.movement_max_value = 0.6  # Maximum expected normalized movement value (typical max from detector)
         # BPM targets based on movement thresholds (gradual decrease for low movement)
-        # Low movement: BPM decreases in steps: 118 -> 115 -> 113 -> 110
-        self.threshold_very_very_low = 0.02  # < 2% -> 110 BPM
-        self.threshold_very_low = 0.05       # < 5% -> 113 BPM
+        # Low movement: BPM decreases in steps: 118 -> 115 -> 110 -> 105
+        self.threshold_very_very_low = 0.02  # < 2% -> 105 BPM
+        self.threshold_very_low = 0.05       # < 5% -> 110 BPM
         self.threshold_low = 0.10            # < 10% -> 115 BPM
         self.threshold_medium = 0.15         # < 15% -> 118 BPM
         # BPM targets
-        self.bpm_very_very_low = 110.0  # Movement < 2%
-        self.bpm_very_low = 113.0       # Movement 2-5%
+        self.bpm_very_very_low = 105.0  # Movement < 2%
+        self.bpm_very_low = 110.0       # Movement 2-5%
         self.bpm_low = 115.0            # Movement 5-10%
         self.bpm_medium = 118.0         # Movement 10-15%
         self.bpm_high_max = 130.0       # Maximum BPM for high movement

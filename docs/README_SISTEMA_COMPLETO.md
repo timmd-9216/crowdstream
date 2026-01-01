@@ -109,8 +109,8 @@ Todos reciben mensajes OSC de movimiento y reaccionan en tiempo real.
 
 | Nivel de Movimiento | Umbral | BPM Target |
 |---------------------|--------|------------|
-| Muy muy bajo        | < 2%   | 110 BPM    |
-| Muy bajo            | 2-5%   | 113 BPM    |
+| Muy muy bajo        | < 2%   | 105 BPM    |
+| Muy bajo            | 2-5%   | 110 BPM    |
 | Bajo                | 5-10%  | 115 BPM    |
 | Medio-bajo          | 10-15% | 118 BPM    |
 | Alto                | ≥ 15%  | 118→130 BPM (progresivo) |

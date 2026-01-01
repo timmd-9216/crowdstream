@@ -128,8 +128,8 @@ All receive OSC movement messages and react in real-time.
 
 | Movement Level | Threshold | Target BPM |
 |----------------|-----------|------------|
-| Very very low  | < 2%      | 110 BPM    |
-| Very low       | 2-5%      | 113 BPM    |
+| Very very low  | < 2%      | 105 BPM    |
+| Very low       | 2-5%      | 110 BPM    |
 | Low            | 5-10%     | 115 BPM    |
 | Medium-low     | 10-15%    | 118 BPM    |
 | High           | ≥ 15%     | 118→130 BPM (progressive) |

@@ -733,16 +733,16 @@ def main():
                         )
                     # Continuous BPM adjustment system (same as audio_server.py)
                     # Base BPM is 120, adjust continuously based on movement thresholds
-                    # Low movement: BPM decreases in steps: 118 -> 115 -> 113 -> 110
+                    # Low movement: BPM decreases in steps: 118 -> 115 -> 110 -> 105
                     # High movement: BPM increases up to 130
                     # Thresholds for low movement (gradual decrease)
-                    threshold_very_very_low = 0.02  # < 2% -> 110 BPM
-                    threshold_very_low = 0.05       # < 5% -> 113 BPM
+                    threshold_very_very_low = 0.02  # < 2% -> 105 BPM
+                    threshold_very_low = 0.05       # < 5% -> 110 BPM
                     threshold_low = 0.10            # < 10% -> 115 BPM
                     threshold_medium = 0.15         # < 15% -> 118 BPM
                     # BPM targets
-                    bpm_very_very_low = 110.0  # Movement < 2%
-                    bpm_very_low = 113.0       # Movement 2-5%
+                    bpm_very_very_low = 105.0  # Movement < 2%
+                    bpm_very_low = 110.0       # Movement 2-5%
                     bpm_low = 115.0            # Movement 5-10%
                     bpm_medium = 118.0         # Movement 10-15%
                     bpm_high_max = 130.0       # Maximum BPM for high movement
