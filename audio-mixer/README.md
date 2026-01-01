@@ -66,6 +66,26 @@ Both `audio_server.py` and `mixer_tracks.py` share this logic. The movement data
 python audio_server.py --port 57122
 ```
 
+#### Requirements for Time-Stretch
+
+For BPM changes to actually affect audio playback speed, you need:
+
+1. **pyrubberband** (Python package - included in requirements.txt)
+2. **rubberband** (system library)
+
+```bash
+# macOS
+brew install rubberband
+
+# Ubuntu/Debian
+sudo apt-get install rubberband-cli
+
+# Raspberry Pi
+sudo apt-get install rubberband-cli
+```
+
+Without rubberband, BPM changes will only affect the internal clock but not the actual audio playback speed.
+
 ### Recent Fixes
 
 - **Race condition fix**: `/start_group` now waits for buffers to load before starting playback ([details](AUDIO_SERVER_RACE_CONDITION_FIX.md))

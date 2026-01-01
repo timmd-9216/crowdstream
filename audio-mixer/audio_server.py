@@ -1308,7 +1308,8 @@ class PythonAudioServer:
             self.target_bpm = bpm
             if self.base_bpm > 0:
                 self.time_stretch_ratio = float(bpm) / float(self.base_bpm)
-            print(f"⏱️  Tempo set to {bpm:.2f} BPM")
+            stretch_status = "ENABLED" if self.enable_time_stretch else "DISABLED"
+            print(f"⏱️  Tempo set to {bpm:.2f} BPM (ratio={self.time_stretch_ratio:.3f}, stretch={stretch_status})")
         except Exception as exc:  # pragma: no cover - runtime diagnostic
             print(f"❌ Error setting tempo: {exc}")
     
