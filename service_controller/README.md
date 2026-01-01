@@ -115,7 +115,7 @@ Edita `config/services.json` para agregar o modificar servicios:
     },
     {
       "name": "visualizer",
-      "directory": "space_visualizer",
+      "directory": "visualizers/space_visualizer",
       "command": "venv/bin/python3 src/visualizer_server.py --osc-port 5006 --web-port 8090",
       "description": "Visualizador espacial 3D (OSC: 5006, Web: 8090)",
       "port": 8090,
@@ -263,7 +263,7 @@ service_controller/
    ```bash
    chmod +x dance_movement_detector/start.sh
    chmod +x dance_dashboard/start.sh
-   chmod +x space_visualizer/start.sh
+   chmod +x visualizers/space_visualizer/start.sh
    ```
 
 2. Verifica que las rutas en `config/services.json` sean correctas

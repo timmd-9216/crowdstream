@@ -135,66 +135,66 @@ fi
 echo "Starting $VISUALIZER..."
 case $VISUALIZER in
     cosmic_skeleton)
-        cd cosmic_skeleton
+        cd visualizers/cosmic_skeleton
         if [ -d "venv" ]; then
-            venv/bin/python3 src/server.py --osc-port 5007 --port 8091 > ../logs/cosmic_skeleton.log 2>&1 &
+            venv/bin/python3 src/server.py --osc-port 5007 --port 8091 > ../../logs/cosmic_skeleton.log 2>&1 &
         else
-            python3 src/server.py --osc-port 5007 --port 8091 > ../logs/cosmic_skeleton.log 2>&1 &
+            python3 src/server.py --osc-port 5007 --port 8091 > ../../logs/cosmic_skeleton.log 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Cosmic Skeleton started (PID: $VISUALIZER_PID) on http://localhost:8091"
         VISUALIZER_LOG="cosmic_skeleton.log"
         ;;
     cosmic_skeleton_standalone)
-        cd cosmic_skeleton_standalone
+        cd visualizers/cosmic_skeleton_standalone
         if [ -d "venv" ]; then
-            DISPLAY=:0 venv/bin/python3 src/server.py --port 8094 --source 0 --imgsz 416 > ../logs/cosmic_standalone.log 2>&1 &
+            DISPLAY=:0 venv/bin/python3 src/server.py --port 8094 --source 0 --imgsz 416 > ../../logs/cosmic_standalone.log 2>&1 &
         else
-            DISPLAY=:0 python3 src/server.py --port 8094 --source 0 --imgsz 416 > ../logs/cosmic_standalone.log 2>&1 &
+            DISPLAY=:0 python3 src/server.py --port 8094 --source 0 --imgsz 416 > ../../logs/cosmic_standalone.log 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Cosmic Skeleton Standalone started (PID: $VISUALIZER_PID) on http://localhost:8094"
         VISUALIZER_LOG="cosmic_standalone.log"
         ;;
     skeleton_visualizer)
-        cd skeleton_visualizer
+        cd visualizers/skeleton_visualizer
         if [ -d "venv" ]; then
-            venv/bin/python3 src/server.py --osc-port 5007 --port 8093 > ../logs/skeleton_visualizer.log 2>&1 &
+            venv/bin/python3 src/server.py --osc-port 5007 --port 8093 > ../../logs/skeleton_visualizer.log 2>&1 &
         else
-            python3 src/server.py --osc-port 5007 --port 8093 > ../logs/skeleton_visualizer.log 2>&1 &
+            python3 src/server.py --osc-port 5007 --port 8093 > ../../logs/skeleton_visualizer.log 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Skeleton Visualizer started (PID: $VISUALIZER_PID) on http://localhost:8093"
         VISUALIZER_LOG="skeleton_visualizer.log"
         ;;
     cosmic_journey)
-        cd cosmic_journey
+        cd visualizers/cosmic_journey
         if [ -d "venv" ]; then
-            venv/bin/python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > ../logs/cosmic.log 2>&1 &
+            venv/bin/python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > ../../logs/cosmic.log 2>&1 &
         else
-            python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > ../logs/cosmic.log 2>&1 &
+            python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > ../../logs/cosmic.log 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Cosmic Journey started (PID: $VISUALIZER_PID) on http://localhost:8091"
         VISUALIZER_LOG="cosmic.log"
         ;;
     space_visualizer)
-        cd space_visualizer
+        cd visualizers/space_visualizer
         if [ -d "venv" ]; then
-            venv/bin/python3 src/visualizer_server.py > ../logs/space.log 2>&1 &
+            venv/bin/python3 src/visualizer_server.py > ../../logs/space.log 2>&1 &
         else
-            python3 src/visualizer_server.py > ../logs/space.log 2>&1 &
+            python3 src/visualizer_server.py > ../../logs/space.log 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Space Visualizer started (PID: $VISUALIZER_PID)"
         VISUALIZER_LOG="space.log"
         ;;
     blur_skeleton)
-        cd blur_skeleton_visualizer
+        cd visualizers/blur_skeleton_visualizer
         if [ -d "venv" ]; then
-            venv/bin/python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > ../logs/blur.log 2>&1 &
+            venv/bin/python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > ../../logs/blur.log 2>&1 &
         else
-            python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > ../logs/blur.log 2>&1 &
+            python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > ../../logs/blur.log 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Blur Skeleton started (PID: $VISUALIZER_PID) on http://localhost:8092"

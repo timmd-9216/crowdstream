@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Iniciar todos los servicios
-./start-all-services.sh --visualizer cosmic_skeleton --no-dashboard
+#./start-all-services.sh --visualizer cosmic_skeleton --no-dashboard
+./start-all-services.sh --visualizer cosmic_skeleton
 #./start-all-services.sh  --visualizer cosmic_skeleton_standalone --no-dashboard 
 
 # Detectar el sistema operativo

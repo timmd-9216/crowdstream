@@ -1,5 +1,5 @@
 {
-  "video_source": 0,
+  "video_source": 1,
   "message_interval": 10.0,
   "osc_host": "127.0.0.1",
   "osc_port": 5005,
