@@ -100,9 +100,24 @@ Todos reciben mensajes OSC de movimiento y reaccionan en tiempo real.
 
 ### 4. 🎵 Audio Mixer (`audio-mixer/`)
 - Mezclador de audio interactivo que recibe mensajes de movimiento
+- **Ajuste automático de BPM** basado en movimiento detectado
 - Ajusta filtros EQ (low/mid/high) basado en movimiento
 - Mezcla múltiples pistas con transiciones suaves
 - Filtros EQ con interpolación suave (50ms por defecto)
+
+**Control de BPM basado en Movimiento:**
+
+| Nivel de Movimiento | Umbral | BPM Target |
+|---------------------|--------|------------|
+| Muy muy bajo        | < 2%   | 110 BPM    |
+| Muy bajo            | 2-5%   | 113 BPM    |
+| Bajo                | 5-10%  | 115 BPM    |
+| Medio-bajo          | 10-15% | 118 BPM    |
+| Alto                | ≥ 15%  | 118→130 BPM (progresivo) |
+
+- **Poco movimiento** → BPM baja gradualmente: 118 → 115 → 113 → 110
+- **Mucho movimiento** → BPM sube progresivamente hasta 130 BPM
+- **Transiciones** toman ~30 segundos para cambios suaves y musicales
 
 **Puertos**: 
 - Audio Server OSC: 57122

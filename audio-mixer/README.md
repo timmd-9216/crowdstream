@@ -34,6 +34,38 @@ python audio_server.py --buffer-size 256   # 6ms latency
 
 **See [AUDIO_BUFFER_SIZE_TUNING.md](AUDIO_BUFFER_SIZE_TUNING.md)** for detailed tuning guide.
 
+### Movement-Based BPM Control
+
+The audio server supports **automatic BPM adjustment based on detected movement**. This creates an adaptive musical experience where tempo responds to audience/performer activity.
+
+#### How It Works
+
+The system uses **threshold-based BPM targets** with smooth transitions (~30 seconds):
+
+| Movement Level | Threshold | Target BPM |
+|----------------|-----------|------------|
+| Very very low  | < 2%      | 110 BPM    |
+| Very low       | 2-5%      | 113 BPM    |
+| Low            | 5-10%     | 115 BPM    |
+| Medium-low     | 10-15%    | 118 BPM    |
+| High           | ≥ 15%     | 118→130 BPM (progressive) |
+
+#### Behavior
+
+- **Low movement** → BPM gradually decreases in steps: 118 → 115 → 113 → 110
+- **High movement** → BPM progressively increases up to 130 BPM
+- **All transitions** take approximately 30 seconds for smooth, musical changes
+- **Base BPM** starts at 120 BPM
+
+#### Configuration
+
+Both `audio_server.py` and `mixer_tracks.py` share this logic. The movement data is received via OSC on port 57122 from the dance movement detector.
+
+```bash
+# Movement-based BPM is enabled by default
+python audio_server.py --port 57122
+```
+
 ### Recent Fixes
 
 - **Race condition fix**: `/start_group` now waits for buffers to load before starting playback ([details](AUDIO_SERVER_RACE_CONDITION_FIX.md))

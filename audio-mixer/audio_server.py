@@ -489,12 +489,18 @@ class PythonAudioServer:
         # Movement values are normalized (0.0-0.6+ typical range from detector)
         # Using 0.6 as max for normalization to match detector's typical range
         self.movement_max_value = 0.6  # Maximum expected normalized movement value (typical max from detector)
-        # BPM targets based on movement thresholds
-        self.movement_threshold_low = 0.05  # 5% - very low movement
-        self.movement_threshold_high = 0.15  # 15% - threshold between low and high movement
-        self.bpm_target_very_low = 112.0  # Target BPM when movement < 5%
-        self.bpm_target_low = 115.0  # Target BPM when movement < 15%
-        self.bpm_target_high = 130.0  # Maximum BPM when movement > 15%
+        # BPM targets based on movement thresholds (gradual decrease for low movement)
+        # Low movement: BPM decreases in steps: 118 -> 115 -> 113 -> 110
+        self.threshold_very_very_low = 0.02  # < 2% -> 110 BPM
+        self.threshold_very_low = 0.05       # < 5% -> 113 BPM
+        self.threshold_low = 0.10            # < 10% -> 115 BPM
+        self.threshold_medium = 0.15         # < 15% -> 118 BPM
+        # BPM targets
+        self.bpm_very_very_low = 110.0  # Movement < 2%
+        self.bpm_very_low = 113.0       # Movement 2-5%
+        self.bpm_low = 115.0            # Movement 5-10%
+        self.bpm_medium = 118.0         # Movement 10-15%
+        self.bpm_high_max = 130.0       # Maximum BPM for high movement
         # Smoothing for 30-second transitions
         # Audio loop runs at ~100Hz (every ~10ms for 512 samples at 44100Hz)
         # For 30s transition: need ~3000 iterations to reach 99% of target
@@ -1340,32 +1346,34 @@ class PythonAudioServer:
             self.previous_movement = normalized_movement
             self.current_movement = normalized_movement
             
-            # Continuous BPM adjustment system (not direct mapping)
-            # Base BPM is 120, adjust continuously based on movement thresholds
-            # Movement < 5%: target 112 BPM (lower BPM for very low movement)
-            # Movement < 15%: target 115 BPM (lower BPM for low movement)
-            # Movement >= 15%: increase BPM progressively up to 130 BPM (higher BPM for high movement)
-            if normalized_movement < self.movement_threshold_low:
-                # Very low movement (< 5%) -> target 112 BPM
-                target_bpm = self.bpm_target_very_low
-            elif normalized_movement < self.movement_threshold_high:
-                # Low movement (5-15%) -> target 115 BPM
-                target_bpm = self.bpm_target_low
+            # Continuous BPM adjustment system
+            # Low movement: BPM decreases in steps: 118 -> 115 -> 113 -> 110
+            # High movement (>= 15%): increase BPM progressively up to 130
+            if normalized_movement < self.threshold_very_very_low:
+                # Very very low movement (< 2%) -> target 110 BPM
+                target_bpm = self.bpm_very_very_low
+            elif normalized_movement < self.threshold_very_low:
+                # Very low movement (2-5%) -> target 113 BPM
+                target_bpm = self.bpm_very_low
+            elif normalized_movement < self.threshold_low:
+                # Low movement (5-10%) -> target 115 BPM
+                target_bpm = self.bpm_low
+            elif normalized_movement < self.threshold_medium:
+                # Medium-low movement (10-15%) -> target 118 BPM
+                target_bpm = self.bpm_medium
             else:
                 # High movement (>= 15%) -> increase BPM progressively up to 130
-                # Map movement from 15% to 100% to BPM range 115-130
-                # More movement = higher BPM (up to 130)
-                movement_above_threshold = normalized_movement - self.movement_threshold_high
-                # Normalize to 0-1 range (assuming max movement is around 0.6 or 60%)
+                # Map movement from 15% to 60% to BPM range 118-130
+                movement_above_threshold = normalized_movement - self.threshold_medium
                 max_expected_movement = 0.6  # 60% as typical maximum
-                movement_range = max_expected_movement - self.movement_threshold_high
+                movement_range = max_expected_movement - self.threshold_medium
                 if movement_range > 0:
                     high_movement_factor = min(movement_above_threshold / movement_range, 1.0)
                 else:
                     high_movement_factor = 0.0
-                # Map from 115 to 130 BPM
-                bpm_range = self.bpm_target_high - self.bpm_target_low
-                target_bpm = self.bpm_target_low + (high_movement_factor * bpm_range)
+                # Map from 118 to 130 BPM
+                bpm_range = self.bpm_high_max - self.bpm_medium
+                target_bpm = self.bpm_medium + (high_movement_factor * bpm_range)
             
             # Adjust smoothing factor for smooth ~30 second transitions
             # Use stable smoothing factor (0.98) to achieve gradual transitions

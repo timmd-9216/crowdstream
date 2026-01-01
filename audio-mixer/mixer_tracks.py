@@ -731,12 +731,47 @@ def main():
                         print(
                             f"🐢 Movement low: avg={recent_avg:.3f} baseline={baseline:.3f} -> prefer NORMAL bpm"
                         )
-                    delta = recent_avg - baseline
-                    # Invert logic: more movement -> lower BPM, less movement -> higher BPM
-                    # When delta is positive (movement increased), we want negative shift (lower BPM)
-                    # When delta is negative (movement decreased), we want positive shift (higher BPM)
-                    target_shift = max(-tempo_range, min(tempo_range, -delta * tempo_scale))
-                    target = tempo_base + target_shift
+                    # Continuous BPM adjustment system (same as audio_server.py)
+                    # Base BPM is 120, adjust continuously based on movement thresholds
+                    # Low movement: BPM decreases in steps: 118 -> 115 -> 113 -> 110
+                    # High movement: BPM increases up to 130
+                    # Thresholds for low movement (gradual decrease)
+                    threshold_very_very_low = 0.02  # < 2% -> 110 BPM
+                    threshold_very_low = 0.05       # < 5% -> 113 BPM
+                    threshold_low = 0.10            # < 10% -> 115 BPM
+                    threshold_medium = 0.15         # < 15% -> 118 BPM
+                    # BPM targets
+                    bpm_very_very_low = 110.0  # Movement < 2%
+                    bpm_very_low = 113.0       # Movement 2-5%
+                    bpm_low = 115.0            # Movement 5-10%
+                    bpm_medium = 118.0         # Movement 10-15%
+                    bpm_high_max = 130.0       # Maximum BPM for high movement
+                    
+                    if recent_avg < threshold_very_very_low:
+                        # Very very low movement (< 2%) -> target 110 BPM
+                        target = bpm_very_very_low
+                    elif recent_avg < threshold_very_low:
+                        # Very low movement (2-5%) -> target 113 BPM
+                        target = bpm_very_low
+                    elif recent_avg < threshold_low:
+                        # Low movement (5-10%) -> target 115 BPM
+                        target = bpm_low
+                    elif recent_avg < threshold_medium:
+                        # Medium-low movement (10-15%) -> target 118 BPM
+                        target = bpm_medium
+                    else:
+                        # High movement (>= 15%) -> increase BPM progressively up to 130
+                        # Map movement from 15% to 60% to BPM range 118-130
+                        movement_above_threshold = recent_avg - threshold_medium
+                        max_expected_movement = 0.6  # 60% as typical maximum
+                        movement_range = max_expected_movement - threshold_medium
+                        if movement_range > 0:
+                            high_movement_factor = min(movement_above_threshold / movement_range, 1.0)
+                        else:
+                            high_movement_factor = 0.0
+                        # Map from 118 to 130 BPM
+                        bpm_range = bpm_high_max - bpm_medium
+                        target = bpm_medium + (high_movement_factor * bpm_range)
                     with movements_lock:
                         prev_target = float(tempo_state["target"])
                         tempo_state["target"] = float(target)
