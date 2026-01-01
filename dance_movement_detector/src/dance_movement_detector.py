@@ -89,7 +89,7 @@ class BodyPartTracker:
         count = 0
         
         # Sensitivity multiplier to amplify movement detection
-        SENSITIVITY_MULTIPLIER = 2.5  # Increase sensitivity by 2.5x
+        SENSITIVITY_MULTIPLIER = 4.0  # Increase sensitivity by 4x for better responsiveness
 
         # Calculate movement between consecutive frames
         for i in range(1, len(history)):

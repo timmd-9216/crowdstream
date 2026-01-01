@@ -478,21 +478,39 @@ class PythonAudioServer:
         self.time_stretch_ratio = 1.0
         self.enable_time_stretch = enable_time_stretch and pyrb is not None
         
-        # Movement-based BPM control
+        # Movement-based BPM control (continuous adjustment system)
         self.movement_bpm_enabled = True
-        self.movement_bpm_min = 80.0  # Minimum BPM when movement is high
-        self.movement_bpm_max = 120.0  # Maximum BPM when movement is low
-        self.movement_smoothing_factor_base = 0.98  # Base smoothing factor (higher = smoother)
-        self.movement_smoothing_factor = 0.98  # Current dynamic smoothing factor
+        self.base_bpm_default = 120.0  # Default/base BPM
+        # Smoothing factor will be calculated below for 30s transitions
+        self.movement_smoothing_factor_base = None  # Will be set after transition_time calculation
+        self.movement_smoothing_factor = None  # Will be set after transition_time calculation
         self.current_movement = 0.0  # Current normalized movement value (0.0-1.0)
         self.previous_movement = 0.0  # Previous movement value to calculate delta
         # Movement values are normalized (0.0-0.6+ typical range from detector)
         # Using 0.6 as max for normalization to match detector's typical range
         self.movement_max_value = 0.6  # Maximum expected normalized movement value (typical max from detector)
-        # Dynamic smoothing factors based on movement direction
+        # BPM targets based on movement thresholds
+        self.movement_threshold_low = 0.05  # 5% - very low movement
+        self.movement_threshold_high = 0.15  # 15% - threshold between low and high movement
+        self.bpm_target_very_low = 112.0  # Target BPM when movement < 5%
+        self.bpm_target_low = 115.0  # Target BPM when movement < 15%
+        self.bpm_target_high = 130.0  # Maximum BPM when movement > 15%
+        # Smoothing for 30-second transitions
+        # Audio loop runs at ~100Hz (every ~10ms for 512 samples at 44100Hz)
+        # For 30s transition: need ~3000 iterations to reach 99% of target
+        # Formula: smoothing_factor = exp(-1 / (transition_time * update_rate))
+        # For 30s at 100Hz: smoothing_factor = exp(-1 / (30 * 100)) ≈ 0.99967
+        self.transition_time_seconds = 30.0  # Target transition time in seconds
+        audio_loop_rate_hz = 100.0  # Approximate audio loop update rate
+        # Calculate smoothing factor for ~30 second transitions
+        # Higher smoothing_factor = slower transition
+        self.smoothing_factor_stable = np.exp(-1.0 / (self.transition_time_seconds * audio_loop_rate_hz))
+        # Set initial smoothing factors to the calculated stable value
+        self.movement_smoothing_factor_base = self.smoothing_factor_stable
+        self.movement_smoothing_factor = self.smoothing_factor_stable
+        # Dynamic smoothing factors (not used in continuous mode, but kept for compatibility)
         self.smoothing_factor_up = 0.96  # When movement increases (BPM should decrease faster)
         self.smoothing_factor_down = 0.92  # When movement decreases (BPM should increase faster)
-        self.smoothing_factor_stable = 0.98  # When movement is stable (normal smoothing)
         self._time_stretch_warned = False
         if enable_time_stretch and pyrb is None:
             print("⚠️  pyrubberband not available; time-stretch disabled.")
@@ -1289,14 +1307,14 @@ class PythonAudioServer:
             print(f"❌ Error setting tempo: {exc}")
     
     def osc_total_movement(self, address: str, *args: object) -> None:
-        """Receive total movement value and adjust BPM smoothly - /dance/total_movement [value].
+        """Receive total movement value and adjust BPM continuously - /dance/total_movement [value].
         
-        Higher movement values result in lower BPM (slower tempo).
-        Movement is normalized to 0.0-1.0 and mapped to BPM range.
-        Adjusts smoothing factor dynamically based on movement delta:
-        - When movement increases: BPM decreases faster (more sensitive)
-        - When movement decreases: BPM increases faster (more sensitive)
-        - When movement drops proportionally: BPM increases even faster
+        Continuous BPM adjustment system (not direct mapping):
+        - Base BPM: 120
+        - Movement < 5%: target 112 BPM (lower BPM for very low movement)
+        - Movement < 15%: target 115 BPM (lower BPM for low movement)
+        - Movement >= 15%: increase BPM progressively up to 130 BPM (higher BPM for high movement)
+        - All transitions are smooth (~30 seconds to reach target)
         """
         try:
             if not self.movement_bpm_enabled:
@@ -1322,46 +1340,37 @@ class PythonAudioServer:
             self.previous_movement = normalized_movement
             self.current_movement = normalized_movement
             
-            # Map movement to BPM: high movement -> low BPM, low movement -> high BPM
-            # Inverse mapping: movement 1.0 -> min_bpm, movement 0.0 -> max_bpm
-            # Use a more aggressive mapping for low movement values to reach higher BPM faster
-            # Since normalized movement values are typically 0.0-0.1 for low movement, we need to map this range to high BPM
-            if normalized_movement < 0.1:
-                # For low movement (0.0-0.1), map directly to high BPM range (117-120)
-                # Movement 0.0 -> 120 BPM, Movement 0.1 -> 117 BPM
-                # Use a linear mapping for simplicity and responsiveness
-                low_movement_factor = normalized_movement / 0.1  # 0.0-1.0
-                target_bpm = 120.0 - (low_movement_factor * 3.0)  # 120 down to 117
-            elif normalized_movement < 0.3:
-                # For mid movement (0.1-0.3), map to 117 down to ~100
-                mid_movement_factor = (normalized_movement - 0.1) / 0.2  # 0.0-1.0
-                target_bpm = 117.0 - (mid_movement_factor * 17.0)  # 117 down to 100
+            # Continuous BPM adjustment system (not direct mapping)
+            # Base BPM is 120, adjust continuously based on movement thresholds
+            # Movement < 5%: target 112 BPM (lower BPM for very low movement)
+            # Movement < 15%: target 115 BPM (lower BPM for low movement)
+            # Movement >= 15%: increase BPM progressively up to 130 BPM (higher BPM for high movement)
+            if normalized_movement < self.movement_threshold_low:
+                # Very low movement (< 5%) -> target 112 BPM
+                target_bpm = self.bpm_target_very_low
+            elif normalized_movement < self.movement_threshold_high:
+                # Low movement (5-15%) -> target 115 BPM
+                target_bpm = self.bpm_target_low
             else:
-                # For higher movement (0.15-1.0), use standard mapping down to min BPM
-                high_movement_factor = (normalized_movement - 0.15) / 0.85  # 0.0-1.0 for high movement
-                target_bpm = 110.0 - (high_movement_factor * (110.0 - self.movement_bpm_min))  # 110 down to 80
-            
-            # Adjust smoothing factor based on movement direction and magnitude
-            # When movement increases (delta > 0): target BPM decreases, make it decrease faster (lower smoothing factor)
-            # When movement decreases (delta < 0): target BPM increases, make it increase faster (lower smoothing factor)
-            # When movement drops significantly: BPM should increase even faster
-            if abs(movement_delta) < 0.001:  # Movement is stable
-                self.movement_smoothing_factor = self.smoothing_factor_stable
-            elif movement_delta > 0:  # Movement increasing (target BPM should decrease faster)
-                # More sensitive when movement increases - BPM should drop faster
-                # Scale sensitivity based on delta magnitude
-                delta_magnitude = min(abs(movement_delta) * 12.0, 1.0)  # Scale to 0-1, more sensitive
-                self.movement_smoothing_factor = self.smoothing_factor_up - (delta_magnitude * 0.04)  # Range: 0.96 to 0.92 (faster)
-            else:  # Movement decreasing (target BPM should increase faster)
-                # More sensitive when movement decreases, even more if it drops significantly
-                delta_magnitude = min(abs(movement_delta) * 20.0, 1.0)  # Scale to 0-1, very sensitive
-                # If movement drops proportionally (large negative delta), make it even faster
-                if abs(movement_delta) > 0.05:  # Significant drop - BPM should rise much faster
-                    self.movement_smoothing_factor = self.smoothing_factor_down - 0.05  # Range: 0.87 (very fast)
-                elif abs(movement_delta) > 0.02:  # Moderate drop
-                    self.movement_smoothing_factor = self.smoothing_factor_down - 0.03  # Range: 0.89
+                # High movement (>= 15%) -> increase BPM progressively up to 130
+                # Map movement from 15% to 100% to BPM range 115-130
+                # More movement = higher BPM (up to 130)
+                movement_above_threshold = normalized_movement - self.movement_threshold_high
+                # Normalize to 0-1 range (assuming max movement is around 0.6 or 60%)
+                max_expected_movement = 0.6  # 60% as typical maximum
+                movement_range = max_expected_movement - self.movement_threshold_high
+                if movement_range > 0:
+                    high_movement_factor = min(movement_above_threshold / movement_range, 1.0)
                 else:
-                    self.movement_smoothing_factor = self.smoothing_factor_down - (delta_magnitude * 0.04)  # Range: 0.92 to 0.88
+                    high_movement_factor = 0.0
+                # Map from 115 to 130 BPM
+                bpm_range = self.bpm_target_high - self.bpm_target_low
+                target_bpm = self.bpm_target_low + (high_movement_factor * bpm_range)
+            
+            # Adjust smoothing factor for smooth ~30 second transitions
+            # Use stable smoothing factor (0.98) to achieve gradual transitions
+            # This allows the BPM to smoothly reach the target over approximately 30 seconds
+            self.movement_smoothing_factor = self.smoothing_factor_stable
             
             self.target_bpm = target_bpm
             

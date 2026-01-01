@@ -732,7 +732,10 @@ def main():
                             f"🐢 Movement low: avg={recent_avg:.3f} baseline={baseline:.3f} -> prefer NORMAL bpm"
                         )
                     delta = recent_avg - baseline
-                    target_shift = max(-tempo_range, min(tempo_range, delta * tempo_scale))
+                    # Invert logic: more movement -> lower BPM, less movement -> higher BPM
+                    # When delta is positive (movement increased), we want negative shift (lower BPM)
+                    # When delta is negative (movement decreased), we want positive shift (higher BPM)
+                    target_shift = max(-tempo_range, min(tempo_range, -delta * tempo_scale))
                     target = tempo_base + target_shift
                     with movements_lock:
                         prev_target = float(tempo_state["target"])
