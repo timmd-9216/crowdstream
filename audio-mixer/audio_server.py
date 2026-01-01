@@ -486,7 +486,9 @@ class PythonAudioServer:
         self.movement_smoothing_factor = 0.98  # Current dynamic smoothing factor
         self.current_movement = 0.0  # Current normalized movement value (0.0-1.0)
         self.previous_movement = 0.0  # Previous movement value to calculate delta
-        self.movement_max_value = 100.0  # Maximum expected movement value for normalization
+        # Movement values are normalized (0.0-0.6+ typical range from detector)
+        # Using 0.6 as max for normalization to match detector's typical range
+        self.movement_max_value = 0.6  # Maximum expected normalized movement value (typical max from detector)
         # Dynamic smoothing factors based on movement direction
         self.smoothing_factor_up = 0.96  # When movement increases (BPM should decrease faster)
         self.smoothing_factor_down = 0.92  # When movement decreases (BPM should increase faster)
@@ -1302,6 +1304,7 @@ class PythonAudioServer:
             
             movement_value = float(args[0])
             # Normalize movement to 0.0-1.0 range
+            # Movement values from detector are already normalized (typically 0.0-0.6+)
             normalized_movement = min(max(movement_value / self.movement_max_value, 0.0), 1.0)
             
             # Calculate movement delta
@@ -1311,7 +1314,31 @@ class PythonAudioServer:
             
             # Map movement to BPM: high movement -> low BPM, low movement -> high BPM
             # Inverse mapping: movement 1.0 -> min_bpm, movement 0.0 -> max_bpm
-            target_bpm = self.movement_bpm_max - (normalized_movement * (self.movement_bpm_max - self.movement_bpm_min))
+            # Use a more aggressive mapping for low movement values to reach higher BPM faster
+            # When movement is very low (< 0.05), map it directly to high BPM (117-120 range)
+            if normalized_movement < 0.02:
+                # For very low movement (0.0-0.02), map directly to high BPM range (117-120)
+                # Movement 0.0 -> 120 BPM, Movement 0.02 -> 117 BPM
+                # Use a steeper curve: most low movement values map to ~117 BPM
+                if normalized_movement < 0.005:
+                    # Extremely minimal movement (0.0-0.005) -> 119-120 BPM
+                    low_movement_factor = normalized_movement / 0.005
+                    target_bpm = 120.0 - (low_movement_factor * 1.0)  # 120 down to 119
+                elif normalized_movement < 0.015:
+                    # Very low movement (0.005-0.015) -> 117-119 BPM (most common case)
+                    low_movement_factor = (normalized_movement - 0.005) / 0.01
+                    target_bpm = 119.0 - (low_movement_factor * 2.0)  # 119 down to 117
+                else:
+                    # Low movement (0.015-0.02) -> 117 BPM
+                    target_bpm = 117.0
+            elif normalized_movement < 0.15:
+                # For low movement (0.02-0.15), map to 117 down to ~110
+                low_mid_movement_factor = (normalized_movement - 0.02) / 0.13  # 0.0-1.0
+                target_bpm = 117.0 - (low_mid_movement_factor * 7.0)  # 117 down to 110
+            else:
+                # For higher movement (0.15-1.0), use standard mapping down to min BPM
+                high_movement_factor = (normalized_movement - 0.15) / 0.85  # 0.0-1.0 for high movement
+                target_bpm = 110.0 - (high_movement_factor * (110.0 - self.movement_bpm_min))  # 110 down to 80
             
             # Adjust smoothing factor based on movement direction and magnitude
             # When movement increases (delta > 0): target BPM decreases, make it decrease faster (lower smoothing factor)
