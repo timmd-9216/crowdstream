@@ -126,3 +126,55 @@ Check that Python can see ffmpeg:
 ```bash
 python -c "import shutil; print(shutil.which('ffmpeg'))"
 ```
+
+---
+
+## Troubleshooting
+
+### Performance Issues with Real-Time EQ Filters
+
+If you experience **audio glitches, stuttering, or high CPU usage** when EQ filters are enabled:
+
+**Raspberry Pi:**
+- EQ filters are **disabled by default** on Raspberry Pi for performance
+- Real-time EQ processing can cause audio dropouts and exceed CPU budget
+- If you enabled them with `--enable-filters` and experience issues, disable them:
+  ```bash
+  # Remove --enable-filters flag from audio-mix-start.sh
+  python audio_server.py --port 57122  # Without --enable-filters
+  ```
+- For better performance, use optimized filters (requires scipy):
+  ```bash
+  python audio_server.py --port 57122 --optimized-filters
+  ```
+
+**Mac M1:**
+- EQ filters are **disabled by default** on Mac M1 for performance
+- Real-time EQ processing can cause audio dropouts and high CPU usage (80-100%)
+- To disable filters:
+  ```bash
+  python audio_server.py --port 57122  # Filters disabled by default on M1
+  ```
+- If you need EQ control, consider:
+  - Using external hardware EQs
+  - Using software EQs outside the audio server
+  - Upgrading to M2 Pro/Max/Ultra (filters enabled by default)
+
+**General Recommendations:**
+- Monitor CPU usage: `top` or `htop` to verify impact
+- Use filters only on more powerful systems (M2 Pro/Max, desktop CPUs)
+- Increase buffer size if using filters: `--buffer-size 2048` (higher latency but more stable)
+- Consider alternatives: External hardware EQs or software EQs outside the audio server
+
+**Performance Testing:**
+```bash
+# Without filters (baseline)
+python audio_server.py --port 57122
+# Monitor CPU: should be < 30% on desktop, < 50% on RPi
+
+# With filters
+python audio_server.py --port 57122 --enable-filters
+# Monitor CPU: may spike to 80-100% on RPi/M1
+```
+
+See [docs/TROUBLESHOOTING.md](../docs/TROUBLESHOOTING.md) for more detailed troubleshooting information.

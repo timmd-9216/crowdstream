@@ -68,9 +68,15 @@ cd audio-mixer && ./kill_audio.sh
 ### 1. 🤖 Dance Movement Detector (`dance_movement_detector/`)
 - Detecta personas con YOLO v8 Pose
 - Analiza movimiento de brazos, piernas y cabeza
+- **Normalización por bounding box**: El movimiento se normaliza por el tamaño del bounding box, haciéndolo independiente de la distancia a la cámara
 - Envía datos vía OSC a múltiples destinos
 
 **Puerto OSC de salida**: Envía a 5005 y 5006
+
+**Movimiento Normalizado:**
+- Los valores de movimiento son relativos al tamaño de la persona (normalizados)
+- No dependen de la distancia a la cámara
+- Valores típicos: 0.0 (sin movimiento) a 0.6+ (movimiento muy intenso)
 
 ### 2. 📊 Dashboard (`movement_dashboard/`)
 - Visualiza estadísticas en tiempo real

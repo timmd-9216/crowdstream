@@ -22,6 +22,7 @@ Sistema de detección de movimiento de bailarines usando YOLO v8 Pose Detection.
   - Movimiento de brazos
   - Movimiento de piernas
   - Movimiento de cabeza
+- **Normalización por bounding box**: El movimiento se normaliza por el tamaño del bounding box, haciéndolo independiente de la distancia a la cámara
 - **Mensajes OSC configurables** (default: cada 10 segundos)
 - **Tracking de múltiples personas** simultáneamente
 - **Fuentes de video flexibles**: webcam o archivos de video
@@ -155,14 +156,35 @@ Iniciar con configuración personalizada:
 ./start.sh --config config/multi_destination.json
 ```
 
-## Ejemplo de recepción (Processing/Max/Pure Data)
+## Cálculo de Movimiento
 
-Los valores de movimiento son pixeles de desplazamiento promedio. Valores típicos:
-- Baile moderado: 10-50
-- Baile energético: 50-150+
-- Movimiento mínimo: <10
+### Normalización por Bounding Box
 
-Puedes escalar/normalizar estos valores según tu aplicación.
+El movimiento se calcula de forma **normalizada por el tamaño del bounding box** de cada persona. Esto significa que:
+
+- **Independiente de la distancia**: Una persona cerca de la cámara y otra lejos, con el mismo movimiento relativo, producirán valores similares
+- **Proporcional al tamaño**: El movimiento se mide como fracción del tamaño de la persona (normalizado)
+- **Más preciso**: Los valores reflejan la intensidad del movimiento, no solo la distancia en píxeles
+
+**Cómo funciona:**
+1. Se calcula el tamaño del bounding box (promedio de ancho y alto)
+2. El movimiento en píxeles se divide por el tamaño del bbox
+3. El resultado es un valor normalizado que representa movimiento relativo
+
+**Ejemplo:**
+- Persona cerca (bbox 200px) moviendo 50px → movimiento normalizado: 0.25
+- Persona lejos (bbox 100px) moviendo 25px → movimiento normalizado: 0.25
+- Ambas tienen el mismo movimiento relativo, independientemente de la distancia
+
+### Valores de Movimiento
+
+Los valores de movimiento son **normalizados** (relativos al tamaño de la persona). Valores típicos:
+- Movimiento mínimo: < 0.1
+- Baile moderado: 0.1 - 0.3
+- Baile energético: 0.3 - 0.6+
+- Movimiento muy intenso: > 0.6
+
+Puedes escalar estos valores según tu aplicación. Los valores anteriores (en píxeles absolutos) ya no son aplicables debido a la normalización.
 
 ## Requisitos del sistema
 

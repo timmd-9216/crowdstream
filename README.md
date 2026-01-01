@@ -69,9 +69,15 @@ cd audio-mixer && ./kill_audio.sh
 ### 1. 🤖 Movement Detector (`dance_movement_detector/`)
 - Detects people using YOLO v8 Pose
 - Analyzes movement of arms, legs, and head
+- **Bounding box normalization**: Movement is normalized by bounding box size, making it independent of camera distance
 - Sends data via OSC to multiple destinations
 
 **OSC Output Port**: Sends to ports 5005, 5007, and 57120
+
+**Normalized Movement:**
+- Movement values are relative to person size (normalized)
+- Independent of camera distance
+- Typical values: 0.0 (no movement) to 0.6+ (very intense movement)
 
 ### 2. 📊 Dashboard (`movement_dashboard/`)
 - Real-time statistics visualization
@@ -172,6 +178,32 @@ lsof -i:57120
 lsof -i:8082
 lsof -i:8091
 ```
+
+### Performance issues with real-time EQ filters
+
+If you experience **audio glitches, stuttering, or high CPU usage** when EQ filters are enabled:
+
+**Raspberry Pi:**
+- EQ filters are **disabled by default** on Raspberry Pi for performance
+- If you enabled them with `--enable-filters` and experience issues, disable them:
+  ```bash
+  # Remove --enable-filters flag from audio-mix-start.sh
+  python audio_server.py --port 57122  # Without --enable-filters
+  ```
+
+**Mac M1:**
+- EQ filters are **disabled by default** on Mac M1 for performance
+- Real-time EQ processing can cause audio dropouts and high CPU usage
+- To disable filters:
+  ```bash
+  python audio_server.py --port 57122  # Filters disabled by default on M1
+  ```
+
+**General recommendations:**
+- Use filters only on more powerful systems (M2 Pro/Max, desktop CPUs)
+- If you need EQ control, consider using external hardware or software EQs
+- Monitor CPU usage: `top` or `htop` to verify impact
+- Increase buffer size if using filters: `--buffer-size 2048` (higher latency but more stable)
 
 ## 📜 License
 

@@ -60,17 +60,30 @@ class BodyPartTracker:
         """
         self.history_size = history_size
         self.pose_history: Dict[int, deque] = defaultdict(lambda: deque(maxlen=history_size))
+        self.bbox_size_history: Dict[int, deque] = defaultdict(lambda: deque(maxlen=history_size))  # Store bbox size for normalization
 
-    def update(self, person_id: int, keypoints: np.ndarray):
-        """Update pose history for a person"""
+    def update(self, person_id: int, keypoints: np.ndarray, bbox_size: float = None):
+        """Update pose history for a person
+        
+        Args:
+            person_id: Tracking ID of the person
+            keypoints: Array of keypoints (x, y, confidence)
+            bbox_size: Size of bounding box (diagonal or average dimension) for normalization
+        """
         self.pose_history[person_id].append(keypoints.copy())
+        if bbox_size is not None:
+            self.bbox_size_history[person_id].append(bbox_size)
+        elif person_id in self.bbox_size_history and len(self.bbox_size_history[person_id]) > 0:
+            # Reuse last known bbox size if not provided
+            self.bbox_size_history[person_id].append(self.bbox_size_history[person_id][-1])
 
     def calculate_movement(self, person_id: int, keypoint_indices: List[int]) -> float:
-        """Calculate movement for specific keypoints"""
+        """Calculate movement for specific keypoints, normalized by bounding box size"""
         if person_id not in self.pose_history or len(self.pose_history[person_id]) < 2:
             return 0.0
 
         history = list(self.pose_history[person_id])
+        bbox_history = list(self.bbox_size_history[person_id]) if person_id in self.bbox_size_history else []
         total_movement = 0.0
         count = 0
 
@@ -78,6 +91,17 @@ class BodyPartTracker:
         for i in range(1, len(history)):
             prev_frame = history[i-1]
             curr_frame = history[i]
+            
+            # Get average bbox size for normalization (use current frame's bbox or previous)
+            bbox_size = 1.0  # Default: no normalization if bbox size not available
+            if len(bbox_history) >= i:
+                bbox_size = bbox_history[i-1] if i-1 < len(bbox_history) else (bbox_history[-1] if bbox_history else 1.0)
+            elif len(bbox_history) > 0:
+                bbox_size = bbox_history[-1]  # Use last known bbox size
+            
+            # Skip normalization if bbox_size is invalid
+            if bbox_size <= 0:
+                bbox_size = 1.0
 
             for kp_idx in keypoint_indices:
                 if kp_idx >= len(prev_frame) or kp_idx >= len(curr_frame):
@@ -88,11 +112,15 @@ class BodyPartTracker:
 
                 # Check if keypoints are visible (confidence > 0)
                 if prev_point[2] > 0 and curr_point[2] > 0:
-                    # Euclidean distance
+                    # Euclidean distance in pixels
                     dx = curr_point[0] - prev_point[0]
                     dy = curr_point[1] - prev_point[1]
                     distance = np.sqrt(dx*dx + dy*dy)
-                    total_movement += distance
+                    
+                    # Normalize by bounding box size (movement relative to person size)
+                    # This makes movement independent of distance from camera
+                    normalized_distance = distance / bbox_size if bbox_size > 0 else distance
+                    total_movement += normalized_distance
                     count += 1
 
         return total_movement / max(count, 1)
@@ -321,10 +349,38 @@ class DanceMovementDetector:
                     if num_keypoints > 0:
                         print(f"⚠️ Tracking failed: {num_keypoints} people detected but no IDs assigned")
 
-                # Update tracker with new poses
+                # Extract bounding boxes for normalization
+                bbox_sizes = []
+                if results[0].boxes is not None and len(results[0].boxes) > 0:
+                    boxes_xyxy = results[0].boxes.xyxy.cpu().numpy()  # [x1, y1, x2, y2]
+                    for box in boxes_xyxy:
+                        # Calculate bounding box size (average of width and height)
+                        width = box[2] - box[0]  # x2 - x1
+                        height = box[3] - box[1]  # y2 - y1
+                        # Use average of width and height as normalization factor
+                        # This makes movement relative to person size, independent of camera distance
+                        bbox_size = (width + height) / 2.0
+                        bbox_sizes.append(bbox_size)
+                else:
+                    # Fallback: estimate from keypoints if boxes not available
+                    for kps in keypoints:
+                        # Get bounding box from keypoint extents
+                        visible_kps = kps[kps[:, 2] > 0]  # Only visible keypoints
+                        if len(visible_kps) > 0:
+                            min_x, min_y = visible_kps[:, :2].min(axis=0)
+                            max_x, max_y = visible_kps[:, :2].max(axis=0)
+                            width = max_x - min_x
+                            height = max_y - min_y
+                            bbox_size = (width + height) / 2.0
+                        else:
+                            bbox_size = 100.0  # Default fallback
+                        bbox_sizes.append(bbox_size)
+
+                # Update tracker with new poses and bounding box sizes
                 active_ids = set()
-                for person_id, kps in zip(track_ids, keypoints):
-                    self.tracker.update(person_id, kps)
+                for idx, (person_id, kps) in enumerate(zip(track_ids, keypoints)):
+                    bbox_size = bbox_sizes[idx] if idx < len(bbox_sizes) else 100.0
+                    self.tracker.update(person_id, kps, bbox_size)
                     active_ids.add(person_id)
 
                 # Send keypoint data for skeleton visualization

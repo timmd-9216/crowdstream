@@ -103,3 +103,92 @@ For future projects:
 - Test network communication with `tcpdump` or `netstat`
 - Consider binding servers to `0.0.0.0` (all IPv4) or `::` (all IPv6)
 - Document network requirements clearly
+
+---
+
+## Performance Issues with Real-Time EQ Filters
+
+### Problem
+Audio glitches, stuttering, dropouts, or high CPU usage when real-time EQ filters are enabled.
+
+### Symptoms
+- Audio dropouts or crackling sounds
+- High CPU usage (80-100% on Raspberry Pi or Mac M1)
+- Audio buffer underruns
+- System becomes unresponsive
+- "Audio loop exceeded budget" warnings in logs
+
+### Root Cause
+**CPU-Intensive Real-Time Processing**
+
+Real-time EQ filters (3-band: low/mid/high) require significant CPU resources:
+- Each audio chunk must be processed through multiple IIR filters
+- Processing happens in the critical audio thread (must complete within buffer time)
+- On lower-powered systems (Raspberry Pi, Mac M1), this can exceed the audio buffer budget
+
+### Solutions
+
+#### Raspberry Pi
+- **EQ filters are disabled by default** on Raspberry Pi
+- If you enabled them with `--enable-filters` and experience issues:
+  ```bash
+  # Remove --enable-filters flag from audio-mix-start.sh
+  python audio_server.py --port 57122  # Without --enable-filters
+  ```
+- For better performance, use optimized filters (requires scipy):
+  ```bash
+  python audio_server.py --port 57122 --optimized-filters
+  ```
+- Increase buffer size to reduce CPU pressure:
+  ```bash
+  python audio_server.py --port 57122 --buffer-size 2048  # Higher latency but more stable
+  ```
+
+#### Mac M1
+- **EQ filters are disabled by default** on Mac M1
+- Real-time EQ processing can cause audio dropouts and high CPU usage
+- To disable filters:
+  ```bash
+  python audio_server.py --port 57122  # Filters disabled by default on M1
+  ```
+- If you need EQ control, consider:
+  - Using external hardware EQs
+  - Using software EQs outside the audio server
+  - Upgrading to M2 Pro/Max/Ultra (filters enabled by default)
+
+#### General Recommendations
+- **Monitor CPU usage**: Use `top` or `htop` to verify impact
+- **Use filters only on powerful systems**: M2 Pro/Max/Ultra, desktop CPUs
+- **Increase buffer size**: Higher buffer = more CPU headroom but higher latency
+- **Consider alternatives**: External hardware EQs or software EQs outside the audio server
+- **Test incrementally**: Enable filters and monitor performance before using in production
+
+### Performance Testing
+
+To verify if EQ filters are causing issues:
+
+```bash
+# Without filters (baseline)
+python audio_server.py --port 57122
+# Monitor CPU: should be < 30% on desktop, < 50% on RPi
+
+# With filters
+python audio_server.py --port 57122 --enable-filters
+# Monitor CPU: may spike to 80-100% on RPi/M1
+
+# With optimized filters (if scipy available)
+python audio_server.py --port 57122 --optimized-filters
+# Should be 50-100x faster than standard filters
+```
+
+### Related Configuration
+
+The system automatically detects the platform and sets defaults:
+- **Raspberry Pi**: Filters disabled by default
+- **Mac M1**: Filters disabled by default  
+- **Mac M2 Pro/Max/Ultra**: Filters enabled by default
+- **Other systems**: Filters disabled by default
+
+You can override defaults with:
+- `--enable-filters`: Force enable filters
+- `--disable-filters`: Force disable filters
