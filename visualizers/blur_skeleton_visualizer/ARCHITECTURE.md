@@ -76,7 +76,7 @@ cd blur_skeleton_visualizer
 
 **Opción 2: Con detector (para otros visualizadores)**
 ```bash
-./start-all-services.sh --visualizer cosmic_journey
+./scripts/start-all-services.sh --visualizer cosmic_journey
 # El detector alimenta cosmic_journey
 # Blur funciona independiente en otro puerto
 ```

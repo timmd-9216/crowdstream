@@ -246,7 +246,7 @@ c.send_message('/deck_eq', ['A', 'low', 30])
 
 ```bash
 # Start server with mixer
-./start-crowdstream.sh
+./scripts/start-crowdstream.sh
 ```
 
 Watch for performance logs. Should see:

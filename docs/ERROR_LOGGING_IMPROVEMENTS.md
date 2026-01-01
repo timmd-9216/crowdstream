@@ -297,7 +297,7 @@ To test file-not-found handling:
 
 ```bash
 # Start server
-./start-crowdstream.sh
+./scripts/start-crowdstream.sh
 
 # In another terminal, send OSC with bad path
 python3 -c "

@@ -280,7 +280,7 @@ These occurred because:
 To verify the fix works:
 
 ```bash
-./start-crowdstream.sh
+./scripts/start-crowdstream.sh
 ```
 
 **Expected output**:

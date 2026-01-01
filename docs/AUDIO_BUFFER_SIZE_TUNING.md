@@ -251,7 +251,7 @@ self.chunk_size = int(os.getenv('AUDIO_BUFFER_SIZE', '256'))
 
 Usage:
 ```bash
-AUDIO_BUFFER_SIZE=1024 ./start-crowdstream.sh
+AUDIO_BUFFER_SIZE=1024 ./scripts/start-crowdstream.sh
 ```
 
 ## Testing Different Buffer Sizes

@@ -41,6 +41,6 @@ else
 fi
 
 #old
-#./start-all-services.sh  --visualizer cosmic_skeleton --no-dashboard 
-#./start-chrome.sh 8091 &
+#./scripts/start-all-services.sh  --visualizer cosmic_skeleton --no-dashboard 
+#./scripts/start-chrome.sh 8091 &
 
