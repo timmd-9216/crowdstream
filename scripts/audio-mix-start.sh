@@ -80,7 +80,22 @@ sleep_if_rpi 8  # Wait for audio server to fully initialize (ALSA probing takes 
 sleep 2
 
 # Run mixer.py with correct search root for parts_temp_26
-python mixer.py --preflight-only --search-root "$AUDIO_MIXER_DIR/parts_temp_26" #run first time, to generate a csv?
+# Use tracks from parts_temp_26 for preflight (find any two WAV files)
+FIRST_WAV=$(find "$AUDIO_MIXER_DIR/parts_temp_26" -name "*.wav" -type f | head -1)
+SECOND_WAV=$(find "$AUDIO_MIXER_DIR/parts_temp_26" -name "*.wav" -type f | head -2 | tail -1)
+if [ -n "$FIRST_WAV" ] && [ -n "$SECOND_WAV" ]; then
+    FIRST_REL=$(basename "$FIRST_WAV")
+    SECOND_REL=$(basename "$SECOND_WAV")
+    python mixer.py --preflight-only --search-root "$AUDIO_MIXER_DIR/parts_temp_26" \
+        --track-a "parts_temp_26/$FIRST_REL" \
+        --track-b "parts_temp_26/$SECOND_REL" || true
+elif [ -n "$FIRST_WAV" ]; then
+    # If only one WAV found, use it for both tracks
+    FIRST_REL=$(basename "$FIRST_WAV")
+    python mixer.py --preflight-only --search-root "$AUDIO_MIXER_DIR/parts_temp_26" \
+        --track-a "parts_temp_26/$FIRST_REL" \
+        --track-b "parts_temp_26/$FIRST_REL" || true
+fi
 #python mixer.py --host 0.0.0.0 --port 57120 --optimized-filters --search-root "$AUDIO_MIXER_DIR/parts_temp_26" &
 #python mixer.py --host 0.0.0.0 --port 57120 --optimized-filters --search-root "$AUDIO_MIXER_DIR/parts_temp_26" &
 #python mixer_3tracks.py --host 0.0.0.0 --port 57120 &
