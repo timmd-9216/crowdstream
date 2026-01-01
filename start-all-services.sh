@@ -120,11 +120,11 @@ echo ""
 # Start Dashboard (optional)
 if [ "$START_DASHBOARD" = true ]; then
     echo "Starting FastAPI Dashboard..."
-    cd "$ROOT_DIR/dance_dashboard_alt"
+    cd "$ROOT_DIR/movement_dashboard"
     if [ -d "venv" ]; then
-        venv/bin/python3 src/server.py --osc-port 5005 --web-port 8082 > "$ROOT_DIR/logs/dashboard_alt.log" 2>&1 &
+        venv/bin/python3 src/server.py --osc-port 5005 --web-port 8082 > "$ROOT_DIR/logs/movement_dashboard.log" 2>&1 &
     else
-        python3 src/server.py --osc-port 5005 --web-port 8082 > "$ROOT_DIR/logs/dashboard_alt.log" 2>&1 &
+        python3 src/server.py --osc-port 5005 --web-port 8082 > "$ROOT_DIR/logs/movement_dashboard.log" 2>&1 &
     fi
     DASHBOARD_PID=$!
     echo "  Dashboard started (PID: $DASHBOARD_PID) on http://localhost:8082"
@@ -269,7 +269,7 @@ echo ""
 # Show log commands
 echo "To view logs:"
 if [ "$START_DASHBOARD" = true ]; then
-    echo "  tail -f logs/dashboard_alt.log"
+    echo "  tail -f logs/movement_dashboard.log"
 fi
 echo "  tail -f logs/$VISUALIZER_LOG"
 echo "  tail -f logs/detector.log"

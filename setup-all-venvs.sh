@@ -50,7 +50,7 @@ install_service() {
 }
 
 # Install all services
-install_service "dance_dashboard_alt" "FastAPI Dashboard"
+install_service "movement_dashboard" "FastAPI Dashboard"
 install_service "visualizers/cosmic_journey" "Cosmic Journey Visualizer"
 install_service "visualizers/cosmic_skeleton" "Cosmic Skeleton Visualizer"
 install_service "visualizers/cosmic_skeleton_standalone" "Cosmic Skeleton Standalone"
@@ -74,7 +74,7 @@ if [ $SUCCESS -eq $TOTAL ]; then
     echo "🎉 All virtual environments created successfully!"
     echo ""
     echo "Virtual environments created for:"
-    echo "  • dance_dashboard_alt/venv"
+    echo "  • movement_dashboard/venv"
     echo "  • visualizers/cosmic_journey/venv"
     echo "  • visualizers/cosmic_skeleton/venv"
     echo "  • visualizers/cosmic_skeleton_standalone/venv  ⭐ (no detector needed)"

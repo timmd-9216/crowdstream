@@ -33,7 +33,7 @@ kill_service() {
 # Kill services
 kill_service "Dance Movement Detector" "dance_movement_detector.py"
 kill_service "Dashboard Server" "dashboard_server.py"
-kill_service "FastAPI Dashboard" "dance_dashboard_alt/src/server.py"
+kill_service "FastAPI Dashboard" "movement_dashboard/src/server.py"
 kill_service "Cosmic Skeleton" "visualizers/cosmic_skeleton/src/server.py"
 kill_service "Cosmic Journey" "visualizers/cosmic_journey/src/cosmic_server.py"
 kill_service "Space Visualizer" "visualizers/space_visualizer/src/visualizer_server.py"

@@ -1,17 +1,17 @@
-# Comparación: `dance_dashboard` vs `dance_dashboard_alt`
+# Comparación: `dance_dashboard` vs `movement_dashboard`
 
 Este documento resume las diferencias entre las dos implementaciones del dashboard de movimiento.
 
 ## Visión general
 
-| Componente                  | `dance_dashboard` (original)                | `dance_dashboard_alt` (FastAPI)                 |
+| Componente                  | `dance_dashboard` (original)                | `movement_dashboard` (FastAPI)                 |
 |-----------------------------|--------------------------------------------|------------------------------------------------|
 | Framework web               | Flask + Flask-SocketIO (WSGI)               | FastAPI + Uvicorn (ASGI)                       |
 | Transporte tiempo real      | Socket.IO                                   | WebSocket nativo                               |
 | Servidor OSC                | `pythonosc.ThreadingOSCUDPServer` dentro de un hilo (sin captura de errores) | Mismo servidor OSC pero con captura explícita del bind y mensaje amigable |
 | Plantillas/estáticos        | Jinja vía Flask (`url_for('static', ...)`)  | Jinja2 de FastAPI (`url_for('static', path=...)`)|
 | Puertos por defecto         | OSC 5005 / HTTP 8081                        | OSC 5005 / HTTP 8082                           |
-| Script de inicio            | `start.sh` + `start-all-services.sh` (antes lanzaba esta versión) | `dance_dashboard_alt/start.sh` y ahora `start-all-services.sh` lanza esta versión |
+| Script de inicio            | `start.sh` + `start-all-services.sh` (antes lanzaba esta versión) | `movement_dashboard/start.sh` y ahora `start-all-services.sh` lanza esta versión |
 
 ## Backend
 
@@ -20,7 +20,7 @@ Este documento resume las diferencias entre las dos implementaciones del dashboa
 - Cada handler OSC actualiza `self.current_data` y emite inmediatamente un evento `update` por Socket.IO (previo throttle).
 - El botón de reinicio invoca `reset_stats` como evento Socket.IO para limpiar acumulados y reenviar el snapshot.
 
-### Alternativa (`dance_dashboard_alt/src/server.py`)
+### Alternativa (`movement_dashboard/src/server.py`)
 - Usa una clase `DashboardState` que es thread-safe y expone snapshots.
 - FastAPI sirve `/` con la misma plantilla y expone `/api/current` + `/ws` para WebSockets.
 - Reseteos llegan como mensajes JSON `{"action":"reset"}` por el mismo socket y se retransmiten a todos los clientes.
@@ -33,19 +33,19 @@ Este documento resume las diferencias entre las dos implementaciones del dashboa
 - Eventos: `update`, `stats_reset`, `reset_stats` con callback de confirmación.
 - Charts con Chart.js y actualizaciones en tiempo real.
 
-### Alternativa (`dance_dashboard_alt/static/js/dashboard.js`)
+### Alternativa (`movement_dashboard/static/js/dashboard.js`)
 - Conexión `WebSocket` nativa (`ws://host/ws`).
 - Los mensajes se envían como JSON con campo `type` (`update`).
 - El botón “Reiniciar” envía `{ action: 'reset' }` y se apoya en el broadcast inmediato del servidor.
 
 ## Integración con scripts
 
-- `start-all-services.sh` ahora arranca `dance_dashboard_alt/src/server.py` (HTTP 8082) y deja el registro en `logs/dashboard_alt.log`. Antes lanzaba el dashboard original en 8081.
+- `start-all-services.sh` ahora arranca `movement_dashboard/src/server.py` (HTTP 8082) y deja el registro en `logs/movement_dashboard.log`. Antes lanzaba el dashboard original en 8081.
 - Para iniciar manualmente:
   - Original: `cd dance_dashboard && ./start.sh`
-  - Alternativa: `cd dance_dashboard_alt && ./start.sh --osc-port 5005 --web-port 8082`
+  - Alternativa: `cd movement_dashboard && ./start.sh --osc-port 5005 --web-port 8082`
 
 ## Recomendaciones
 
-- Usar `dance_dashboard_alt` cuando se prefiera FastAPI/ASGI o WebSockets nativos.
+- Usar `movement_dashboard` cuando se prefiera FastAPI/ASGI o WebSockets nativos.
 - Mantener `dance_dashboard` si se necesita compatibilidad con Socket.IO u otros servicios ya integrados.

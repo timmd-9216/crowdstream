@@ -16,7 +16,7 @@ WORKDIR /app
 
 # Copy all service directories
 COPY dance_movement_detector/ /app/dance_movement_detector/
-COPY dance_dashboard_alt/ /app/dance_dashboard_alt/
+COPY movement_dashboard/ /app/movement_dashboard/
 COPY cosmic_journey/ /app/cosmic_journey/
 COPY kill-all-services.sh /app/
 COPY start-all-services.sh /app/

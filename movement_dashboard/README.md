@@ -21,7 +21,7 @@ pero implementado con **FastAPI**, WebSockets nativos y Chart.js.
 ## Uso
 
 ```bash
-cd dance_dashboard_alt
+cd movement_dashboard
 ./start.sh --osc-port 5005 --web-port 8082
 ```
 
@@ -30,7 +30,7 @@ Luego abre `http://localhost:8082` en el navegador.
 ## Estructura
 
 ```
-dance_dashboard_alt/
+movement_dashboard/
 ├── requirements.txt
 ├── start.sh
 ├── src/
@@ -52,5 +52,5 @@ dance_dashboard_alt/
 
 - Usa FastAPI + uvicorn en lugar de Flask + Flask-SocketIO
 - Implementa WebSockets nativos (sin Socket.IO) para simplificar el cliente
-- Código separado en `dance_dashboard_alt` para probar la nueva arquitectura sin
+- Código separado en `movement_dashboard` para probar la nueva arquitectura sin
   tocar el dashboard existente
