@@ -3,6 +3,29 @@
 # Kill All Dance Movement Services
 # Stops all running detector, dashboard, visualizer, and controller services
 
+# Function to detect Raspberry Pi
+is_raspberry_pi() {
+    if [ -f /proc/cpuinfo ]; then
+        if grep -q "Raspberry Pi" /proc/cpuinfo 2>/dev/null || grep -q "BCM" /proc/cpuinfo 2>/dev/null; then
+            return 0
+        fi
+    fi
+    if [ -f /sys/firmware/devicetree/base/model ]; then
+        if grep -qi "raspberry" /sys/firmware/devicetree/base/model 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Function to sleep only on Raspberry Pi
+sleep_if_rpi() {
+    local duration=$1
+    if is_raspberry_pi; then
+        sleep "$duration"
+    fi
+}
+
 echo "=== Stopping All Dance Movement Services ==="
 echo ""
 
@@ -18,7 +41,7 @@ kill_service() {
     else
         echo "⚠ $name: Stopping processes..."
         echo "$pids" | xargs kill 2>/dev/null
-        sleep 0.5
+        sleep_if_rpi 0.5
 
         # Force kill if still running
         remaining=$(ps aux | grep "$pattern" | grep -v grep | awk '{print $2}')
@@ -50,7 +73,7 @@ for port in 5005 5006 5007 5008 5009 8000 8080 8081 8082 8090 8091 8092; do
         echo "⚠ Port $port still in use (PIDs: $pids)"
         echo "  Killing processes on port $port..."
         echo "$pids" | xargs kill 2>/dev/null
-        sleep 0.5
+        sleep_if_rpi 0.5
         # Force kill if still running
         remaining=$(lsof -ti:$port 2>/dev/null)
         if [ ! -z "$remaining" ]; then

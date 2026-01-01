@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
 set -e
 
+# Function to detect Raspberry Pi
+is_raspberry_pi() {
+    if [ -f /proc/cpuinfo ]; then
+        if grep -q "Raspberry Pi" /proc/cpuinfo 2>/dev/null || grep -q "BCM" /proc/cpuinfo 2>/dev/null; then
+            return 0
+        fi
+    fi
+    if [ -f /sys/firmware/devicetree/base/model ]; then
+        if grep -qi "raspberry" /sys/firmware/devicetree/base/model 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Function to sleep only on Raspberry Pi
+sleep_if_rpi() {
+    local duration=$1
+    if is_raspberry_pi; then
+        sleep "$duration"
+    fi
+}
+
 ./kill_audio.sh # kill all audio processes
 
 # Get script directory and project root
@@ -14,7 +37,7 @@ source venv/bin/activate
 which python
 python --version
 
-sleep 3
+sleep_if_rpi 3
 
 # Ensure playlist CSV exists (try to generate, fallback to existing selected CSV)
 CSV_NAME="track_data_Cm-Gm_122-d3.csv"
@@ -48,7 +71,7 @@ cd "$SCRIPT_DIR"
 # Run audio_server.py from current directory (audio-mixer/)
 # Filters are disabled by default (use --enable-filters to enable)
 python audio_server.py --port 57122 &
-sleep 8  # Wait for audio server to fully initialize (ALSA probing takes time)
+sleep_if_rpi 8  # Wait for audio server to fully initialize (ALSA probing takes time on RPi)
 sleep 2
 
 # Run mixer.py with correct search root for parts_temp_26

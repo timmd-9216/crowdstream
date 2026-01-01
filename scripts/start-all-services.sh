@@ -3,6 +3,29 @@
 # Start Dance Movement Services
 # Starts detector (always) and optionally dashboard and one visualizer
 
+# Function to detect Raspberry Pi
+is_raspberry_pi() {
+    if [ -f /proc/cpuinfo ]; then
+        if grep -q "Raspberry Pi" /proc/cpuinfo 2>/dev/null || grep -q "BCM" /proc/cpuinfo 2>/dev/null; then
+            return 0
+        fi
+    fi
+    if [ -f /sys/firmware/devicetree/base/model ]; then
+        if grep -qi "raspberry" /sys/firmware/devicetree/base/model 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Function to sleep only on Raspberry Pi
+sleep_if_rpi() {
+    local duration=$1
+    if is_raspberry_pi; then
+        sleep "$duration"
+    fi
+}
+
 show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
@@ -113,7 +136,7 @@ LOG_DIR="$ROOT_DIR/logs"
 echo "Stopping any existing services..."
 cd "$ROOT_DIR"
 ./kill-all-services.sh
-sleep 2
+sleep_if_rpi 2
 
 echo ""
 echo "=== Starting Services ==="
@@ -130,7 +153,7 @@ if [ "$START_DASHBOARD" = true ]; then
     fi
     DASHBOARD_PID=$!
     echo "  Dashboard started (PID: $DASHBOARD_PID) on http://localhost:8082"
-    sleep 2
+    sleep_if_rpi 2
 fi
 
 # Start selected visualizer
@@ -203,7 +226,7 @@ case $VISUALIZER in
         VISUALIZER_LOG="blur.log"
         ;;
 esac
-sleep 2
+sleep_if_rpi 2
 
 # Start Detector (only if not standalone)
 if [ "$IS_STANDALONE" = false ]; then
@@ -217,7 +240,7 @@ if [ "$IS_STANDALONE" = false ]; then
     fi
     DETECTOR_PID=$!
     echo "  Detector started (PID: $DETECTOR_PID)"
-    sleep 2
+    sleep_if_rpi 2
 else
     echo "⏭️  Skipping external detector (visualizer has built-in YOLO)"
     DETECTOR_PID=""

@@ -473,8 +473,25 @@ class PythonAudioServer:
 
         self.clock = TempoClock()
         self.base_bpm = 120.0
+        self.target_bpm = 120.0  # Target BPM for smooth interpolation
+        self.current_bpm = 120.0  # Current BPM (for smooth transitions)
         self.time_stretch_ratio = 1.0
         self.enable_time_stretch = enable_time_stretch and pyrb is not None
+        
+        # Movement-based BPM control
+        self.movement_bpm_enabled = True
+        self.movement_bpm_min = 80.0  # Minimum BPM when movement is high
+        self.movement_bpm_max = 120.0  # Maximum BPM when movement is low
+        self.movement_smoothing_factor = 0.98  # Smooth interpolation factor (higher = smoother, 0.98 = ~50ms at 44.1kHz)
+        self.current_movement = 0.0  # Current normalized movement value (0.0-1.0)
+        self.movement_max_value = 100.0  # Maximum expected movement value for normalization
+        
+        # Movement-based BPM control
+        self.movement_bpm_enabled = True
+        self.movement_bpm_min = 80.0  # Minimum BPM when movement is high
+        self.movement_bpm_max = 120.0  # Maximum BPM when movement is low
+        self.movement_smoothing_factor = 0.95  # Smooth interpolation factor (higher = smoother)
+        self.current_movement = 0.0  # Current normalized movement value (0.0-1.0)
         self._time_stretch_warned = False
         if enable_time_stretch and pyrb is None:
             print("⚠️  pyrubberband not available; time-stretch disabled.")
@@ -582,6 +599,19 @@ class PythonAudioServer:
                         print(f"⏱ bar={bar_index} beat={beat_in_bar} bar_phase={bar_phase:.3f} beat_phase={beat_phase:.3f} bpm={self.clock.bpm:.2f}")
             except Exception:
                 pass
+            # Smooth BPM interpolation based on movement
+            if self.movement_bpm_enabled:
+                try:
+                    # Interpolate current BPM towards target BPM
+                    self.current_bpm += (self.target_bpm - self.current_bpm) * (1.0 - self.movement_smoothing_factor)
+                    # Update clock BPM smoothly
+                    if abs(self.clock.bpm - self.current_bpm) > 0.1:  # Only update if change is significant
+                        self.clock.bpm = self.current_bpm
+                        if self.base_bpm > 0:
+                            self.time_stretch_ratio = float(self.current_bpm) / float(self.base_bpm)
+                except Exception:
+                    pass
+            
             try:
                 deck_a_mix = np.zeros((self.chunk_size, 2), dtype=np.float32)
                 deck_b_mix = np.zeros((self.chunk_size, 2), dtype=np.float32)
@@ -671,6 +701,7 @@ class PythonAudioServer:
         disp.map("/set_tempo", self.osc_set_tempo)
         disp.map("/set_meter", self.osc_set_meter)          # /set_meter [beats_per_bar]
         disp.map("/print_clock", self.osc_print_clock)      # /print_clock [0|1]
+        disp.map("/dance/total_movement", self.osc_total_movement)  # /dance/total_movement [value]
         disp.map("/dummy", self.osc_dummy)
         disp.map("/schedule_c_at", self.osc_schedule_c_at)  # /schedule_c_at [abs_seconds_from_start]
         # Minimal “dummy DJ” API for timed control relative to server t0
@@ -1248,11 +1279,37 @@ class PythonAudioServer:
         try:
             bpm = float(args[0])
             self.clock.bpm = bpm
+            self.current_bpm = bpm
+            self.target_bpm = bpm
             if self.base_bpm > 0:
                 self.time_stretch_ratio = float(bpm) / float(self.base_bpm)
             print(f"⏱️  Tempo set to {bpm:.2f} BPM")
         except Exception as exc:  # pragma: no cover - runtime diagnostic
             print(f"❌ Error setting tempo: {exc}")
+    
+    def osc_total_movement(self, address: str, *args: object) -> None:
+        """Receive total movement value and adjust BPM smoothly - /dance/total_movement [value].
+        
+        Higher movement values result in lower BPM (slower tempo).
+        Movement is normalized to 0.0-1.0 and mapped to BPM range.
+        """
+        try:
+            if not self.movement_bpm_enabled:
+                return
+            
+            movement_value = float(args[0])
+            # Normalize movement to 0.0-1.0 range
+            normalized_movement = min(max(movement_value / self.movement_max_value, 0.0), 1.0)
+            self.current_movement = normalized_movement
+            
+            # Map movement to BPM: high movement -> low BPM, low movement -> high BPM
+            # Inverse mapping: movement 1.0 -> min_bpm, movement 0.0 -> max_bpm
+            target_bpm = self.movement_bpm_max - (normalized_movement * (self.movement_bpm_max - self.movement_bpm_min))
+            self.target_bpm = target_bpm
+            
+            # BPM will be smoothly interpolated in audio_loop
+        except Exception as exc:  # pragma: no cover - runtime diagnostic
+            print(f"❌ Error processing total movement: {exc}")
 
     def start(self) -> Optional[threading.Thread]:
         """Start the audio and OSC servers."""
@@ -1445,6 +1502,9 @@ def main() -> None:
     )
     server.clock.bpm = args.bpm
     server.base_bpm = args.bpm
+    server.current_bpm = args.bpm
+    server.target_bpm = args.bpm
+    server.movement_bpm_max = args.bpm  # Set max BPM to initial BPM
     server.time_stretch_ratio = 1.0
     server.print_clock = bool(args.watch)
     server.meter_beats = int(args.meter) if args.meter and args.meter > 0 else 4
