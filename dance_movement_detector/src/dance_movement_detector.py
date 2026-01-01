@@ -78,7 +78,8 @@ class BodyPartTracker:
             self.bbox_size_history[person_id].append(self.bbox_size_history[person_id][-1])
 
     def calculate_movement(self, person_id: int, keypoint_indices: List[int]) -> float:
-        """Calculate movement for specific keypoints, normalized by bounding box size"""
+        """Calculate movement for specific keypoints, normalized by bounding box size
+        Uses enhanced sensitivity to better detect arm and body movements"""
         if person_id not in self.pose_history or len(self.pose_history[person_id]) < 2:
             return 0.0
 
@@ -86,6 +87,9 @@ class BodyPartTracker:
         bbox_history = list(self.bbox_size_history[person_id]) if person_id in self.bbox_size_history else []
         total_movement = 0.0
         count = 0
+        
+        # Sensitivity multiplier to amplify movement detection
+        SENSITIVITY_MULTIPLIER = 2.5  # Increase sensitivity by 2.5x
 
         # Calculate movement between consecutive frames
         for i in range(1, len(history)):
@@ -120,7 +124,12 @@ class BodyPartTracker:
                     # Normalize by bounding box size (movement relative to person size)
                     # This makes movement independent of distance from camera
                     normalized_distance = distance / bbox_size if bbox_size > 0 else distance
-                    total_movement += normalized_distance
+                    
+                    # Apply sensitivity multiplier to amplify movement detection
+                    # This makes the sensor more responsive to arm and body movements
+                    amplified_movement = normalized_distance * SENSITIVITY_MULTIPLIER
+                    
+                    total_movement += amplified_movement
                     count += 1
 
         return total_movement / max(count, 1)

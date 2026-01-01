@@ -1305,7 +1305,17 @@ class PythonAudioServer:
             movement_value = float(args[0])
             # Normalize movement to 0.0-1.0 range
             # Movement values from detector are already normalized (typically 0.0-0.6+)
-            normalized_movement = min(max(movement_value / self.movement_max_value, 0.0), 1.0)
+            # If movement_value is already in normalized range (0.0-1.0), use it directly
+            # Otherwise, normalize by movement_max_value
+            if movement_value <= 1.0:
+                # Already normalized, use directly
+                normalized_movement = min(max(movement_value, 0.0), 1.0)
+            else:
+                # Scale by movement_max_value
+                normalized_movement = min(max(movement_value / self.movement_max_value, 0.0), 1.0)
+            
+            # Debug: print movement value and normalized value
+            print(f"🔍 DEBUG: movement_value={movement_value:.4f}, normalized={normalized_movement:.4f}")
             
             # Calculate movement delta
             movement_delta = normalized_movement - self.previous_movement
@@ -1315,26 +1325,17 @@ class PythonAudioServer:
             # Map movement to BPM: high movement -> low BPM, low movement -> high BPM
             # Inverse mapping: movement 1.0 -> min_bpm, movement 0.0 -> max_bpm
             # Use a more aggressive mapping for low movement values to reach higher BPM faster
-            # When movement is very low (< 0.05), map it directly to high BPM (117-120 range)
-            if normalized_movement < 0.02:
-                # For very low movement (0.0-0.02), map directly to high BPM range (117-120)
-                # Movement 0.0 -> 120 BPM, Movement 0.02 -> 117 BPM
-                # Use a steeper curve: most low movement values map to ~117 BPM
-                if normalized_movement < 0.005:
-                    # Extremely minimal movement (0.0-0.005) -> 119-120 BPM
-                    low_movement_factor = normalized_movement / 0.005
-                    target_bpm = 120.0 - (low_movement_factor * 1.0)  # 120 down to 119
-                elif normalized_movement < 0.015:
-                    # Very low movement (0.005-0.015) -> 117-119 BPM (most common case)
-                    low_movement_factor = (normalized_movement - 0.005) / 0.01
-                    target_bpm = 119.0 - (low_movement_factor * 2.0)  # 119 down to 117
-                else:
-                    # Low movement (0.015-0.02) -> 117 BPM
-                    target_bpm = 117.0
-            elif normalized_movement < 0.15:
-                # For low movement (0.02-0.15), map to 117 down to ~110
-                low_mid_movement_factor = (normalized_movement - 0.02) / 0.13  # 0.0-1.0
-                target_bpm = 117.0 - (low_mid_movement_factor * 7.0)  # 117 down to 110
+            # Since normalized movement values are typically 0.0-0.1 for low movement, we need to map this range to high BPM
+            if normalized_movement < 0.1:
+                # For low movement (0.0-0.1), map directly to high BPM range (117-120)
+                # Movement 0.0 -> 120 BPM, Movement 0.1 -> 117 BPM
+                # Use a linear mapping for simplicity and responsiveness
+                low_movement_factor = normalized_movement / 0.1  # 0.0-1.0
+                target_bpm = 120.0 - (low_movement_factor * 3.0)  # 120 down to 117
+            elif normalized_movement < 0.3:
+                # For mid movement (0.1-0.3), map to 117 down to ~100
+                mid_movement_factor = (normalized_movement - 0.1) / 0.2  # 0.0-1.0
+                target_bpm = 117.0 - (mid_movement_factor * 17.0)  # 117 down to 100
             else:
                 # For higher movement (0.15-1.0), use standard mapping down to min BPM
                 high_movement_factor = (normalized_movement - 0.15) / 0.85  # 0.0-1.0 for high movement
@@ -1363,6 +1364,9 @@ class PythonAudioServer:
                     self.movement_smoothing_factor = self.smoothing_factor_down - (delta_magnitude * 0.04)  # Range: 0.92 to 0.88
             
             self.target_bpm = target_bpm
+            
+            # Debug: print target BPM
+            print(f"🎯 DEBUG: movement={normalized_movement:.4f} -> target_bpm={target_bpm:.2f}")
             
             # BPM will be smoothly interpolated in audio_loop with dynamic smoothing factor
         except Exception as exc:  # pragma: no cover - runtime diagnostic

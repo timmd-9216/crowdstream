@@ -77,15 +77,16 @@ class DashboardClient {
             }
         };
         setText('current-people', current.person_count ?? 0);
-        setText('current-total', this.formatNumber(current.total_movement));
-        setText('current-arms', this.formatNumber(current.arm_movement));
-        setText('current-legs', this.formatNumber(current.leg_movement));
-        setText('current-head', this.formatNumber(current.head_movement));
+        setText('current-total', this.formatPercentage(current.total_movement, 0));
+        setText('current-arms', this.formatPercentage(current.arm_movement, 0));
+        setText('current-legs', this.formatPercentage(current.leg_movement, 0));
+        setText('current-head', this.formatPercentage(current.head_movement, 0));
         setText('last-update', current.datetime ?? '--:--:--');
     }
 
     updateCumulativeStats(cumulative) {
         const format = (value) => this.formatNumber(value, 1);
+        const formatPct = (value) => this.formatPercentage(value, 0);
         const setText = (id, value) => {
             const el = document.getElementById(id);
             if (el) el.textContent = value;
@@ -94,14 +95,14 @@ class DashboardClient {
         setText('cum-messages', cumulative.total_messages ?? 0);
         setText('cum-avg-people', format(cumulative.avg_people));
         setText('cum-max-people', cumulative.max_people ?? 0);
-        setText('cum-avg-total', format(cumulative.avg_total_movement));
-        setText('cum-max-total', format(cumulative.max_total_movement));
-        setText('cum-avg-arms', format(cumulative.avg_arm_movement));
-        setText('cum-max-arms', format(cumulative.max_arm_movement));
-        setText('cum-avg-legs', format(cumulative.avg_leg_movement));
-        setText('cum-max-legs', format(cumulative.max_leg_movement));
-        setText('cum-avg-head', format(cumulative.avg_head_movement));
-        setText('cum-max-head', format(cumulative.max_head_movement));
+        setText('cum-avg-total', formatPct(cumulative.avg_total_movement));
+        setText('cum-max-total', formatPct(cumulative.max_total_movement));
+        setText('cum-avg-arms', formatPct(cumulative.avg_arm_movement));
+        setText('cum-max-arms', formatPct(cumulative.max_arm_movement));
+        setText('cum-avg-legs', formatPct(cumulative.avg_leg_movement));
+        setText('cum-max-legs', formatPct(cumulative.max_leg_movement));
+        setText('cum-avg-head', formatPct(cumulative.avg_head_movement));
+        setText('cum-max-head', formatPct(cumulative.max_head_movement));
     }
 
     initCharts() {
@@ -250,6 +251,13 @@ class DashboardClient {
     formatNumber(value, digits = 1) {
         const num = Number(value);
         return Number.isFinite(num) ? num.toFixed(digits) : '0.0';
+    }
+
+    formatPercentage(value, digits = 1) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return '0%';
+        const percentage = num * 100;
+        return `${percentage.toFixed(digits)}%`;
     }
 }
 
