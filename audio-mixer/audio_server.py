@@ -632,8 +632,10 @@ class PythonAudioServer:
                     # Update clock BPM smoothly
                     if abs(self.clock.bpm - self.current_bpm) > 0.1:  # Only update if change is significant
                         self.clock.bpm = self.current_bpm
-                        if self.base_bpm > 0:
-                            self.time_stretch_ratio = float(self.current_bpm) / float(self.base_bpm)
+                        if self.base_bpm > 0 and self.current_bpm > 0:
+                            # ratio > 1 = slower (stretch), ratio < 1 = faster (compress)
+                            # To slow down audio from base_bpm to lower current_bpm, we need ratio > 1
+                            self.time_stretch_ratio = float(self.base_bpm) / float(self.current_bpm)
                 except Exception:
                     pass
             
@@ -1306,8 +1308,10 @@ class PythonAudioServer:
             self.clock.bpm = bpm
             self.current_bpm = bpm
             self.target_bpm = bpm
-            if self.base_bpm > 0:
-                self.time_stretch_ratio = float(bpm) / float(self.base_bpm)
+            if self.base_bpm > 0 and bpm > 0:
+                # ratio > 1 = slower (stretch), ratio < 1 = faster (compress)
+                # To slow down audio from base_bpm to lower current_bpm, we need ratio > 1
+                self.time_stretch_ratio = float(self.base_bpm) / float(bpm)
             stretch_status = "ENABLED" if self.enable_time_stretch else "DISABLED"
             print(f"⏱️  Tempo set to {bpm:.2f} BPM (ratio={self.time_stretch_ratio:.3f}, stretch={stretch_status})")
         except Exception as exc:  # pragma: no cover - runtime diagnostic
