@@ -78,6 +78,7 @@ class DashboardClient {
         };
         setText('current-people', current.person_count ?? 0);
         setText('current-total', this.formatPercentage(current.total_movement, 0));
+        setText('current-bpm', this.formatNumber(current.current_bpm ?? 120, 0));
         setText('current-arms', this.formatPercentage(current.arm_movement, 0));
         setText('current-legs', this.formatPercentage(current.leg_movement, 0));
         setText('current-head', this.formatPercentage(current.head_movement, 0));

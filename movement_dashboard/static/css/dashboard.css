@@ -136,6 +136,16 @@ section h2 {
     background: rgba(251, 191, 36, 0.1);
 }
 
+.stat-card.highlight-bpm {
+    border-color: var(--success-color);
+    background: rgba(16, 185, 129, 0.15);
+}
+
+.stat-card.highlight-bpm .stat-value {
+    color: var(--success-color);
+    font-weight: bold;
+}
+
 .stat-icon {
     font-size: 2.5rem;
     margin-bottom: 10px;

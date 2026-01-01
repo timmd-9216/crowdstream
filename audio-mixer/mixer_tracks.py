@@ -498,6 +498,9 @@ def main():
     if client_host in ("0.0.0.0", "::"):
         client_host = "127.0.0.1"
     client = SimpleUDPClient(client_host, args.port)
+    
+    # Dashboard client for sending BPM updates (port 5005)
+    dashboard_client = SimpleUDPClient("127.0.0.1", 5005)
 
     def send(addr, *payload):
         if len(payload) == 1 and isinstance(payload[0], (list, tuple)):
@@ -505,8 +508,16 @@ def main():
         client.send_message(addr, payload)
         print(f"→ {addr} {payload}  (sent by mixer clock)", flush=True)
 
+    def send_bpm_to_dashboard(bpm: float):
+        """Send current BPM to the dashboard."""
+        try:
+            dashboard_client.send_message("/audio/bpm", float(bpm))
+        except Exception:
+            pass  # Dashboard may not be running
+
     send("/reset", [])
     send("/set_tempo", float(args.tempo_base))
+    send_bpm_to_dashboard(float(args.tempo_base))
     print(f"🎚️ Tempo init -> {float(args.tempo_base):.2f} BPM")
     # Start from silence / flat EQ
     send("/deck_levels", 0.0, 0.0, 0.0, 0.0)
@@ -836,6 +847,7 @@ def main():
                 with movements_lock:
                     tempo_state["current"] = float(new_bpm)
                 send("/set_tempo", float(new_bpm))
+                send_bpm_to_dashboard(float(new_bpm))
                 print(f"🎚️ TEMPO STEP: {new_bpm:.2f} BPM (target={target:.2f})")
 
             time.sleep(update_interval)

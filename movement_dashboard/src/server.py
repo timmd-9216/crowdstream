@@ -30,6 +30,7 @@ class MovementData:
     arm_movement: float = 0.0
     leg_movement: float = 0.0
     head_movement: float = 0.0
+    current_bpm: float = 120.0
 
     def to_dict(self) -> Dict:
         ts = datetime.fromtimestamp(self.timestamp)
@@ -41,6 +42,7 @@ class MovementData:
             "arm_movement": round(self.arm_movement, 2),
             "leg_movement": round(self.leg_movement, 2),
             "head_movement": round(self.head_movement, 2),
+            "current_bpm": round(self.current_bpm, 1),
         }
 
 
@@ -62,6 +64,8 @@ class DashboardState:
             "leg_movement",
             "head_movement",
         }
+        # BPM is optional, not required for broadcast
+        self.current_bpm = 120.0
         self.updated_fields: Set[str] = set()
 
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -75,6 +79,8 @@ class DashboardState:
         self.osc_dispatcher.map(f"{base}/arm_movement", self._handle_arm_movement)
         self.osc_dispatcher.map(f"{base}/leg_movement", self._handle_leg_movement)
         self.osc_dispatcher.map(f"{base}/head_movement", self._handle_head_movement)
+        # Audio BPM from mixer
+        self.osc_dispatcher.map("/audio/bpm", self._handle_bpm)
         self.osc_server: osc_server.ThreadingOSCUDPServer | None = None
 
     def attach_loop(self, loop: asyncio.AbstractEventLoop):
@@ -175,6 +181,14 @@ class DashboardState:
             self.current_data.head_movement = float(args[0]) if args else 0.0
             self.updated_fields.add("head_movement")
             self._maybe_broadcast_locked()
+
+    def _handle_bpm(self, address, *args):
+        """Handle BPM updates from audio mixer - /audio/bpm [value]."""
+        with self.lock:
+            bpm = float(args[0]) if args else 120.0
+            self.current_bpm = bpm
+            self.current_data.current_bpm = bpm
+            # BPM updates don't trigger broadcast on their own, they're included in next movement update
 
     def _maybe_broadcast_locked(self):
         now = time.time()
