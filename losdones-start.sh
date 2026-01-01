@@ -1,5 +1,7 @@
 #!/bin/bash
 
+./kill-all-services.sh
+
 # Iniciar todos los servicios
 #./start-all-services.sh --visualizer cosmic_skeleton --no-dashboard
 ./start-all-services.sh --visualizer cosmic_skeleton

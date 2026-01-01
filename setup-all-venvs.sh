@@ -2,7 +2,7 @@
 
 # Setup All Virtual Environments
 # Creates venvs for all services in the project
-
+#
 set -e
 
 echo "=== Setting up All Virtual Environments ==="

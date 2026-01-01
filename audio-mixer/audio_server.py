@@ -46,7 +46,16 @@ class _ThreeBand:
     This keeps minimal state per channel and runs fast on 256‑sample chunks.
     """
 
-    def __init__(self, sample_rate: int, low_hz: float = 200.0, high_hz: float = 2000.0):
+    def __init__(self, sample_rate: int, low_hz: float = 200.0, high_hz: float = 2000.0, 
+                 smoothing_time_ms: float = 50.0):
+        """Initialize 3-band filter with smooth gain transitions.
+        
+        Args:
+            sample_rate: Audio sample rate
+            low_hz: Low-pass cutoff frequency
+            high_hz: High-pass cutoff frequency
+            smoothing_time_ms: Time in milliseconds for gain changes to reach 63% of target (default: 50ms)
+        """
         self.fs = float(sample_rate)
         # one‑pole coefficients
         self._alp_low = np.exp(-2.0 * np.pi * low_hz / self.fs)
@@ -55,26 +64,42 @@ class _ThreeBand:
         self._lp_prev = np.zeros(2, dtype=np.float32)
         self._hp_prev = np.zeros(2, dtype=np.float32)
         self._x_prev = np.zeros(2, dtype=np.float32)
-        # user gains
+        # Smoothing: exponential interpolation towards target gains
+        # smoothing_factor = 1 - exp(-1 / (smoothing_time_ms * sample_rate / 1000))
+        # For 50ms at 44100Hz: factor ≈ 0.00113 per sample, or ~0.5 per buffer (512 samples)
+        smoothing_samples = max(1.0, smoothing_time_ms * self.fs / 1000.0)
+        self._smoothing_factor = 1.0 - np.exp(-1.0 / smoothing_samples)
+        # Target gains (set by user)
+        self._target_low_gain = 1.0
+        self._target_mid_gain = 1.0
+        self._target_high_gain = 1.0
+        # Current gains (interpolated towards targets)
         self.low_gain = 1.0
         self.mid_gain = 1.0
         self.high_gain = 1.0
 
     def set_gain(self, band: str, value: float) -> None:
+        """Set target gain for a band (will smoothly interpolate to this value)."""
         b = (band or "").strip().lower()
         v = float(value)
         if b.startswith("lo"):
-            self.low_gain = v
+            self._target_low_gain = v
         elif b.startswith("mi"):
-            self.mid_gain = v
+            self._target_mid_gain = v
         elif b.startswith("hi"):
-            self.high_gain = v
+            self._target_high_gain = v
         else:
             raise ValueError(f"Unknown band '{band}' (expected 'low'|'mid'|'high')")
 
     def process(self, x: np.ndarray) -> np.ndarray:
         if x.size == 0:
             return x
+        # Smooth gain interpolation towards targets (exponential smoothing)
+        sf = self._smoothing_factor
+        self.low_gain += sf * (self._target_low_gain - self.low_gain)
+        self.mid_gain += sf * (self._target_mid_gain - self.mid_gain)
+        self.high_gain += sf * (self._target_high_gain - self.high_gain)
+        
         out = np.empty_like(x)
         # copy states locally for speed
         lp_prev = self._lp_prev.astype(np.float32)
@@ -119,7 +144,16 @@ class _ThreeBandOptimized:
     Mid: residual = x - low - high
     """
 
-    def __init__(self, sample_rate: int, low_hz: float = 200.0, high_hz: float = 2000.0):
+    def __init__(self, sample_rate: int, low_hz: float = 200.0, high_hz: float = 2000.0,
+                 smoothing_time_ms: float = 50.0):
+        """Initialize optimized 3-band filter with smooth gain transitions.
+        
+        Args:
+            sample_rate: Audio sample rate
+            low_hz: Low-pass cutoff frequency
+            high_hz: High-pass cutoff frequency
+            smoothing_time_ms: Time in milliseconds for gain changes to reach 63% of target (default: 50ms)
+        """
         if not SCIPY_AVAILABLE:
             raise ImportError("scipy is required for optimized filters")
 
@@ -148,20 +182,28 @@ class _ThreeBandOptimized:
         self._zi_hp_L = np.zeros(1, dtype=np.float32)
         self._zi_hp_R = np.zeros(1, dtype=np.float32)
 
-        # User gains
+        # Smoothing: exponential interpolation towards target gains
+        smoothing_samples = max(1.0, smoothing_time_ms * self.fs / 1000.0)
+        self._smoothing_factor = 1.0 - np.exp(-1.0 / smoothing_samples)
+        # Target gains (set by user)
+        self._target_low_gain = 1.0
+        self._target_mid_gain = 1.0
+        self._target_high_gain = 1.0
+        # Current gains (interpolated towards targets)
         self.low_gain = 1.0
         self.mid_gain = 1.0
         self.high_gain = 1.0
 
     def set_gain(self, band: str, value: float) -> None:
+        """Set target gain for a band (will smoothly interpolate to this value)."""
         b = (band or "").strip().lower()
         v = float(value)
         if b.startswith("lo"):
-            self.low_gain = v
+            self._target_low_gain = v
         elif b.startswith("mi"):
-            self.mid_gain = v
+            self._target_mid_gain = v
         elif b.startswith("hi"):
-            self.high_gain = v
+            self._target_high_gain = v
         else:
             raise ValueError(f"Unknown band '{band}' (expected 'low'|'mid'|'high')")
 
@@ -169,6 +211,12 @@ class _ThreeBandOptimized:
         """Process audio using vectorized scipy.signal.lfilter (50-100x faster than Python loops)."""
         if x.size == 0:
             return x
+
+        # Smooth gain interpolation towards targets (exponential smoothing)
+        sf = self._smoothing_factor
+        self.low_gain += sf * (self._target_low_gain - self.low_gain)
+        self.mid_gain += sf * (self._target_mid_gain - self.mid_gain)
+        self.high_gain += sf * (self._target_high_gain - self.high_gain)
 
         # Process each channel separately
         x_L = x[:, 0].astype(np.float32)
@@ -378,7 +426,19 @@ class PythonAudioServer:
     #   D: 3100–4099
 
     def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024,
-                 enable_filters: bool = False, use_optimized_filters: bool = False, enable_time_stretch: bool = True):
+                 enable_filters: bool = False, use_optimized_filters: bool = False, enable_time_stretch: bool = True,
+                 eq_smoothing_time_ms: float = 50.0):
+        """Initialize audio server.
+        
+        Args:
+            osc_port: OSC server port
+            audio_device: Audio device ID (None for default)
+            chunk_size: Audio buffer size in frames
+            enable_filters: Enable 3-band EQ filters
+            use_optimized_filters: Use scipy-optimized filters (faster)
+            enable_time_stretch: Enable real-time time stretching
+            eq_smoothing_time_ms: Time in ms for EQ gain changes to smooth (default: 50ms)
+        """
         self.osc_port = osc_port
         self.sample_rate = 44100
         self.chunk_size = chunk_size  # Default 1024 for Raspberry Pi stability
@@ -405,10 +465,10 @@ class PythonAudioServer:
                 print("⚠️  scipy not available, falling back to standard filters")
 
         self._filters: Dict[str, Union[_ThreeBand, _ThreeBandOptimized]] = {
-            'A': filter_class(self.sample_rate),
-            'B': filter_class(self.sample_rate),
-            'C': filter_class(self.sample_rate),
-            'D': filter_class(self.sample_rate),
+            'A': filter_class(self.sample_rate, smoothing_time_ms=eq_smoothing_time_ms),
+            'B': filter_class(self.sample_rate, smoothing_time_ms=eq_smoothing_time_ms),
+            'C': filter_class(self.sample_rate, smoothing_time_ms=eq_smoothing_time_ms),
+            'D': filter_class(self.sample_rate, smoothing_time_ms=eq_smoothing_time_ms),
         }
 
         self.clock = TempoClock()
