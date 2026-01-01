@@ -2,7 +2,42 @@
 
 A complete system for detecting dancer movement using YOLO v8, with real-time visualization, monitoring dashboard, and interactive audio mixing.
 
-## 🚀 Quick Start
+## 🎯 Launch Performance - Quick Start
+
+**To launch a complete performance, run these two commands:**
+
+### 1. Detector de Movimiento y Visuales
+
+```bash
+./scripts/perfo-start.sh
+```
+
+This starts:
+- 🤖 **Movement Detector** - Detects people and analyzes movement
+- 💀 **Skeleton Visualizer** (`cosmic_skeleton`) - Real-time visualization
+- 📊 **Monitoring Dashboard** (`movement_dashboard`) - Statistics and graphs
+
+**Available Interfaces:**
+- 📊 **Dashboard**: http://localhost:8082
+- 💀 **Skeleton Visualizer**: http://localhost:8091
+
+### 2. Mezcla de Audio que Evoluciona según Movimiento
+
+```bash
+./scripts/audio-mix-start.sh
+```
+
+This starts:
+- 🎛️ **Audio Server** - Mixing engine with EQ filters
+- 🎵 **Interactive Mixer** - Receives OSC movement messages and adjusts mix in real-time based on dancer movement
+
+**Ports:**
+- Audio Server OSC: 57122
+- Movement OSC: 57120 (receives from detector)
+
+---
+
+## 🚀 Installation
 
 ### Virtual Environment Installation
 
@@ -23,45 +58,11 @@ This script creates virtual environments for:
 
 Each service can also be installed individually by running `./install.sh` inside its directory.
 
-### Starting Detection and Visualization System
-
-To start the movement detector, skeleton visualizer, and monitoring dashboard:
-
-```bash
-./scripts/perfo-start.sh
-```
-
-This script starts:
-- 🤖 **Movement Detector** - Detects people and analyzes movement
-- 💀 **Skeleton Visualizer** (`cosmic_skeleton`) - Real-time visualization
-- 📊 **Monitoring Dashboard** (`movement_dashboard`) - Statistics and graphs
-
-**Available Interfaces:**
-- 📊 **Dashboard**: http://localhost:8082
-- 💀 **Skeleton Visualizer**: http://localhost:8091
-
-### Starting Interactive Audio Mixer
-
-The audio mixer receives movement messages (just like the visualizers) and adjusts the mix in real-time:
-
-```bash
-cd audio-mixer
-./scripts/audio-mix-start.sh
-```
-
-This script starts:
-- 🎛️ **Audio Server** - Mixing engine with EQ filters
-- 🎵 **Interactive Mixer** - Receives OSC movement messages on port 57120
-
-**Ports:**
-- Audio Server OSC: 57122
-- Movement OSC: 57120 (receives from detector)
-
 ### Stopping All Services
 
 ```bash
-./scripts/kill-all-services.sh
-./scripts/kill_audio.sh
+./scripts/kill-all-services.sh  # Stops detector, visualizers, and dashboard
+./scripts/kill_audio.sh         # Stops audio mixer
 ```
 
 ### Docker Deployment

@@ -482,16 +482,15 @@ class PythonAudioServer:
         self.movement_bpm_enabled = True
         self.movement_bpm_min = 80.0  # Minimum BPM when movement is high
         self.movement_bpm_max = 120.0  # Maximum BPM when movement is low
-        self.movement_smoothing_factor = 0.98  # Smooth interpolation factor (higher = smoother, 0.98 = ~50ms at 44.1kHz)
+        self.movement_smoothing_factor_base = 0.98  # Base smoothing factor (higher = smoother)
+        self.movement_smoothing_factor = 0.98  # Current dynamic smoothing factor
         self.current_movement = 0.0  # Current normalized movement value (0.0-1.0)
+        self.previous_movement = 0.0  # Previous movement value to calculate delta
         self.movement_max_value = 100.0  # Maximum expected movement value for normalization
-        
-        # Movement-based BPM control
-        self.movement_bpm_enabled = True
-        self.movement_bpm_min = 80.0  # Minimum BPM when movement is high
-        self.movement_bpm_max = 120.0  # Maximum BPM when movement is low
-        self.movement_smoothing_factor = 0.95  # Smooth interpolation factor (higher = smoother)
-        self.current_movement = 0.0  # Current normalized movement value (0.0-1.0)
+        # Dynamic smoothing factors based on movement direction
+        self.smoothing_factor_up = 0.96  # When movement increases (BPM should decrease faster)
+        self.smoothing_factor_down = 0.92  # When movement decreases (BPM should increase faster)
+        self.smoothing_factor_stable = 0.98  # When movement is stable (normal smoothing)
         self._time_stretch_warned = False
         if enable_time_stretch and pyrb is None:
             print("⚠️  pyrubberband not available; time-stretch disabled.")
@@ -1292,6 +1291,10 @@ class PythonAudioServer:
         
         Higher movement values result in lower BPM (slower tempo).
         Movement is normalized to 0.0-1.0 and mapped to BPM range.
+        Adjusts smoothing factor dynamically based on movement delta:
+        - When movement increases: BPM decreases faster (more sensitive)
+        - When movement decreases: BPM increases faster (more sensitive)
+        - When movement drops proportionally: BPM increases even faster
         """
         try:
             if not self.movement_bpm_enabled:
@@ -1300,14 +1303,41 @@ class PythonAudioServer:
             movement_value = float(args[0])
             # Normalize movement to 0.0-1.0 range
             normalized_movement = min(max(movement_value / self.movement_max_value, 0.0), 1.0)
+            
+            # Calculate movement delta
+            movement_delta = normalized_movement - self.previous_movement
+            self.previous_movement = normalized_movement
             self.current_movement = normalized_movement
             
             # Map movement to BPM: high movement -> low BPM, low movement -> high BPM
             # Inverse mapping: movement 1.0 -> min_bpm, movement 0.0 -> max_bpm
             target_bpm = self.movement_bpm_max - (normalized_movement * (self.movement_bpm_max - self.movement_bpm_min))
+            
+            # Adjust smoothing factor based on movement direction and magnitude
+            # When movement increases (delta > 0): target BPM decreases, make it decrease faster (lower smoothing factor)
+            # When movement decreases (delta < 0): target BPM increases, make it increase faster (lower smoothing factor)
+            # When movement drops significantly: BPM should increase even faster
+            if abs(movement_delta) < 0.001:  # Movement is stable
+                self.movement_smoothing_factor = self.smoothing_factor_stable
+            elif movement_delta > 0:  # Movement increasing (target BPM should decrease faster)
+                # More sensitive when movement increases - BPM should drop faster
+                # Scale sensitivity based on delta magnitude
+                delta_magnitude = min(abs(movement_delta) * 12.0, 1.0)  # Scale to 0-1, more sensitive
+                self.movement_smoothing_factor = self.smoothing_factor_up - (delta_magnitude * 0.04)  # Range: 0.96 to 0.92 (faster)
+            else:  # Movement decreasing (target BPM should increase faster)
+                # More sensitive when movement decreases, even more if it drops significantly
+                delta_magnitude = min(abs(movement_delta) * 20.0, 1.0)  # Scale to 0-1, very sensitive
+                # If movement drops proportionally (large negative delta), make it even faster
+                if abs(movement_delta) > 0.05:  # Significant drop - BPM should rise much faster
+                    self.movement_smoothing_factor = self.smoothing_factor_down - 0.05  # Range: 0.87 (very fast)
+                elif abs(movement_delta) > 0.02:  # Moderate drop
+                    self.movement_smoothing_factor = self.smoothing_factor_down - 0.03  # Range: 0.89
+                else:
+                    self.movement_smoothing_factor = self.smoothing_factor_down - (delta_magnitude * 0.04)  # Range: 0.92 to 0.88
+            
             self.target_bpm = target_bpm
             
-            # BPM will be smoothly interpolated in audio_loop
+            # BPM will be smoothly interpolated in audio_loop with dynamic smoothing factor
         except Exception as exc:  # pragma: no cover - runtime diagnostic
             print(f"❌ Error processing total movement: {exc}")
 
