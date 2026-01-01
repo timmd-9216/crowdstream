@@ -1,0 +1,187 @@
+# CrowdStream - Real-Time Movement Detection and Visualization System
+
+A complete system for detecting dancer movement using YOLO v8, with real-time visualization, monitoring dashboard, and interactive audio mixing.
+
+## 🚀 Quick Start
+
+### Virtual Environment Installation
+
+Each service has its own virtual environment. To install all of them:
+
+```bash
+./setup-all-venvs.sh
+```
+
+This script creates virtual environments for:
+- `movement_dashboard/venv` - Monitoring dashboard
+- `visualizers/cosmic_skeleton/venv` - Skeleton visualizer
+- `visualizers/skeleton_visualizer/venv` - Alternative skeleton visualizer
+- `visualizers/cosmic_journey/venv` - Cosmic journey visualizer
+- `visualizers/space_visualizer/venv` - Space visualizer
+- `dance_movement_detector/venv` - Movement detector
+- `audio-mixer/venv` - Audio mixer
+
+Each service can also be installed individually by running `./install.sh` inside its directory.
+
+### Starting Detection and Visualization System
+
+To start the movement detector, skeleton visualizer, and monitoring dashboard:
+
+```bash
+./perfo-start.sh
+```
+
+This script starts:
+- 🤖 **Movement Detector** - Detects people and analyzes movement
+- 💀 **Skeleton Visualizer** (`cosmic_skeleton`) - Real-time visualization
+- 📊 **Monitoring Dashboard** (`movement_dashboard`) - Statistics and graphs
+
+**Available Interfaces:**
+- 📊 **Dashboard**: http://localhost:8082
+- 💀 **Skeleton Visualizer**: http://localhost:8091
+
+### Starting Interactive Audio Mixer
+
+The audio mixer receives movement messages (just like the visualizers) and adjusts the mix in real-time:
+
+```bash
+cd audio-mixer
+./audio-mix-start.sh
+```
+
+This script starts:
+- 🎛️ **Audio Server** - Mixing engine with EQ filters
+- 🎵 **Interactive Mixer** - Receives OSC movement messages on port 57120
+
+**Ports:**
+- Audio Server OSC: 57122
+- Movement OSC: 57120 (receives from detector)
+
+### Stopping All Services
+
+```bash
+./kill-all-services.sh
+cd audio-mixer && ./kill_audio.sh
+```
+
+## 📁 System Components
+
+### 1. 🤖 Movement Detector (`dance_movement_detector/`)
+- Detects people using YOLO v8 Pose
+- Analyzes movement of arms, legs, and head
+- Sends data via OSC to multiple destinations
+
+**OSC Output Port**: Sends to ports 5005, 5007, and 57120
+
+### 2. 📊 Dashboard (`movement_dashboard/`)
+- Real-time statistics visualization
+- Historical graphs with Chart.js
+- Accumulated statistics
+- Implemented with FastAPI and native WebSockets
+
+**Ports**: OSC 5005, Web 8082
+
+### 3. 💀 Visualizers (`visualizers/`)
+All visualizers are organized in the `visualizers/` folder:
+
+- **`cosmic_skeleton/`** - Cosmic skeleton visualization (port 8091)
+- **`skeleton_visualizer/`** - Basic skeleton visualizer (port 8093)
+- **`cosmic_journey/`** - 3D cosmic journey (port 8091)
+- **`space_visualizer/`** - 3D space visualization with Three.js (port 8090)
+- **`blur_skeleton_visualizer/`** - Skeleton with blur effect (port 8092)
+- **`cosmic_skeleton_standalone/`** - Skeleton with integrated detector (port 8094)
+
+All receive OSC movement messages and react in real-time.
+
+### 4. 🎵 Audio Mixer (`audio-mixer/`)
+- Interactive audio mixer that receives movement messages
+- Adjusts EQ filters (low/mid/high) based on movement
+- Mixes multiple tracks with smooth transitions
+- EQ filters with smooth interpolation (50ms default)
+
+**Ports**: 
+- Audio Server OSC: 57122
+- Movement OSC: 57120 (receives from detector)
+
+## 🎯 Data Flow
+
+```
+📹 Camera/Video
+    ↓
+🤖 YOLO v8 Detector
+    ↓ (OSC Messages)
+    ├─→ Port 5005 → 📊 Dashboard (8082)
+    ├─→ Port 5007 → 💀 Skeleton Visualizers (8091, 8093)
+    └─→ Port 57120 → 🎵 Audio Mixer (57122)
+```
+
+## ⚙️ Port Configuration
+
+**Why does each service need its own OSC port?**
+
+Only one service can listen on a port at a time. Therefore:
+- Dashboard listens on OSC port **5005**
+- Visualizers listen on OSC port **5007**
+- Audio Mixer listens on OSC port **57120**
+- Detector **sends to all** simultaneously
+
+| Service | OSC Port (input) | Web Port (output) |
+|---------|------------------|-------------------|
+| Dashboard | 5005 | 8082 |
+| Skeleton Visualizers | 5007 | 8091, 8093 |
+| Audio Mixer | 57120 | - |
+| Detector | Sends to multiple ports | - |
+
+## 📚 Additional Documentation
+
+- [docs/README_SISTEMA_COMPLETO.md](docs/README_SISTEMA_COMPLETO.md) - Complete system documentation (Spanish)
+- [docs/QUICK_START.md](docs/QUICK_START.md) - Quick start guide
+- [docs/MAPPING_CONFIG.md](docs/MAPPING_CONFIG.md) - Visual mapping configuration
+- [docs/RASPBERRY_PI_SETUP.md](docs/RASPBERRY_PI_SETUP.md) - Raspberry Pi setup
+- Each component has its own README in its directory
+
+## 🔧 Troubleshooting
+
+### "Address already in use"
+```bash
+./kill-all-services.sh
+# Wait 2 seconds
+./perfo-start.sh
+```
+
+### Detector not detecting movement
+- Verify camera is working
+- Check `logs/detector.log`
+- Try with `--show-video` to see detections
+
+### Dashboard/Visualizer not updating
+- Verify WebSocket connection (green indicator in UI)
+- Check that detector is sending to correct ports
+- Check `logs/` for errors
+
+### View running processes
+```bash
+ps aux | grep -E "(detector|dashboard|visualizer|audio)" | grep -v grep
+```
+
+### View ports in use
+```bash
+lsof -i:5005
+lsof -i:5007
+lsof -i:57120
+lsof -i:8082
+lsof -i:8091
+```
+
+## 📜 License
+
+Academic project - FIUBA Seminar
+
+## 🔗 Links
+
+- YOLO v8: https://docs.ultralytics.com/
+- Three.js: https://threejs.org/
+- Chart.js: https://www.chartjs.org/
+- python-osc: https://pypi.org/project/python-osc/
+- FastAPI: https://fastapi.tiangolo.com/
+

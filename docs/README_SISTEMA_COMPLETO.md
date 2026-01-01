@@ -4,18 +4,63 @@ Sistema completo para detectar y visualizar movimiento de bailarines usando YOLO
 
 ## 🚀 Inicio Rápido
 
-### Iniciar todo el sistema
+### Instalación de Entornos Virtuales
+
+Cada servicio tiene su propio entorno virtual. Para instalar todos:
+
 ```bash
-./start-all-services.sh
+./setup-all-venvs.sh
 ```
 
-### Abrir interfaces
-- 📊 **Dashboard**: http://localhost:8081
-- 🌌 **Visualizador Espacial**: http://localhost:8090
+Este script crea los entornos virtuales para:
+- `movement_dashboard/venv` - Dashboard de monitoreo
+- `visualizers/cosmic_skeleton/venv` - Visualizador skeleton
+- `visualizers/skeleton_visualizer/venv` - Otro visualizador skeleton
+- `visualizers/cosmic_journey/venv` - Visualizador cósmico
+- `visualizers/space_visualizer/venv` - Visualizador espacial
+- `dance_movement_detector/venv` - Detector de movimiento
+- `audio-mixer/venv` - Mezclador de audio
+
+Cada servicio también puede instalarse individualmente ejecutando `./install.sh` dentro de su directorio.
+
+### Iniciar Sistema de Detección y Visualización
+
+Para iniciar el detector de movimiento, visualizador skeleton y dashboard de monitoreo:
+
+```bash
+./perfo-start.sh
+```
+
+Este script inicia:
+- 🤖 **Detector de movimiento** - Detecta personas y analiza movimiento
+- 💀 **Visualizador skeleton** (`cosmic_skeleton`) - Visualización en tiempo real
+- 📊 **Dashboard de monitoreo** (`movement_dashboard`) - Estadísticas y gráficos
+
+**Interfaces disponibles:**
+- 📊 **Dashboard**: http://localhost:8082
+- 💀 **Visualizador Skeleton**: http://localhost:8091
+
+### Iniciar Mezclador de Audio Interactivo
+
+El mezclador de audio recibe mensajes de movimiento (al igual que las visuales) y ajusta la mezcla en tiempo real:
+
+```bash
+cd audio-mixer
+./audio-mix-start.sh
+```
+
+Este script inicia:
+- 🎛️ **Servidor de audio** - Motor de mezcla con filtros EQ
+- 🎵 **Mezclador interactivo** - Recibe mensajes OSC de movimiento en puerto 57120
+
+**Puertos:**
+- Audio Server OSC: 57122
+- Movement OSC: 57120 (recibe del detector)
 
 ### Detener todo
 ```bash
 ./kill-all-services.sh
+cd audio-mixer && ./kill_audio.sh
 ```
 
 ## 📁 Componentes del Sistema
@@ -27,21 +72,37 @@ Sistema completo para detectar y visualizar movimiento de bailarines usando YOLO
 
 **Puerto OSC de salida**: Envía a 5005 y 5006
 
-### 2. 📊 Dashboard (`dance_dashboard/`)
+### 2. 📊 Dashboard (`movement_dashboard/`)
 - Visualiza estadísticas en tiempo real
 - Gráficos históricos con Chart.js
 - Estadísticas acumuladas
+- Implementado con FastAPI y WebSockets nativos
 
-**Puertos**: OSC 5005, Web 8081
+**Puertos**: OSC 5005, Web 8082
 
-### 3. 🌌 Space Visualizer (`space_visualizer/`)
-- Visualización 3D con Three.js
-- Viaje espacial reactivo al movimiento
-- Mapeo configurable vía JSON
+### 3. 💀 Visualizadores (`visualizers/`)
+Todos los visualizadores están organizados en la carpeta `visualizers/`:
 
-**Puertos**: OSC 5006, Web 8090
+- **`cosmic_skeleton/`** - Visualización skeleton cósmica (puerto 8091)
+- **`skeleton_visualizer/`** - Visualizador skeleton básico (puerto 8093)
+- **`cosmic_journey/`** - Viaje cósmico 3D (puerto 8091)
+- **`space_visualizer/`** - Visualización espacial 3D con Three.js (puerto 8090)
+- **`blur_skeleton_visualizer/`** - Skeleton con efecto blur (puerto 8092)
+- **`cosmic_skeleton_standalone/`** - Skeleton con detector integrado (puerto 8094)
 
-### 4. 🎮 Service Controller (`service_controller/`)
+Todos reciben mensajes OSC de movimiento y reaccionan en tiempo real.
+
+### 4. 🎵 Audio Mixer (`audio-mixer/`)
+- Mezclador de audio interactivo que recibe mensajes de movimiento
+- Ajusta filtros EQ (low/mid/high) basado en movimiento
+- Mezcla múltiples pistas con transiciones suaves
+- Filtros EQ con interpolación suave (50ms por defecto)
+
+**Puertos**: 
+- Audio Server OSC: 57122
+- Movement OSC: 57120 (recibe del detector)
+
+### 5. 🎮 Service Controller (`service_controller/`)
 - Panel web para gestionar todos los servicios
 - Iniciar/detener/reiniciar servicios
 - Ver logs en tiempo real
@@ -55,8 +116,9 @@ Sistema completo para detectar y visualizar movimiento de bailarines usando YOLO
     ↓
 🤖 Detector YOLO v8
     ↓ (OSC Messages)
-    ├─→ Puerto 5005 → 📊 Dashboard (8081)
-    └─→ Puerto 5006 → 🌌 Visualizer (8090)
+    ├─→ Puerto 5005 → 📊 Dashboard (8082)
+    ├─→ Puerto 5007 → 💀 Visualizadores Skeleton (8091, 8093)
+    └─→ Puerto 57120 → 🎵 Audio Mixer (57122)
 ```
 
 ## ⚙️ Configuración de Puertos
@@ -70,9 +132,10 @@ Solo un servicio puede escuchar en un puerto a la vez. Por eso:
 
 | Servicio | Puerto OSC (entrada) | Puerto Web (salida) |
 |----------|---------------------|---------------------|
-| Dashboard | 5005 | 8081 |
-| Visualizer | 5006 | 8090 |
-| Detector | Envía a 5005 + 5006 | - |
+| Dashboard | 5005 | 8082 |
+| Visualizadores Skeleton | 5007 | 8091, 8093 |
+| Audio Mixer | 57120 | - |
+| Detector | Envía a múltiples puertos | - |
 | Controller | - | 8000 |
 
 ## 📝 Mapeo de Movimiento a Visuales
