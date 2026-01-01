@@ -1,6 +1,14 @@
 .env
 *.json
-
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.flac
+*.ogg
+*.opus
+*.wav
+*.m4a
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
