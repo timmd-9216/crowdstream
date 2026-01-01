@@ -25,7 +25,7 @@ This creates: `yolov8n-pose_saved_model/yolov8n-pose_int8.tflite`
 ### 2. Use TFLite Configuration
 
 ```bash
-./start-all-services.sh --visualizer cosmic_skeleton
+./scripts/start-all-services.sh --visualizer cosmic_skeleton
 # Edit to use: config/raspberry_pi_tflite.json
 ```
 

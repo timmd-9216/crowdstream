@@ -2,11 +2,18 @@
 
 # Docker startup script for all CrowdStream services
 
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 echo "=== Building and Starting CrowdStream Services in Docker ==="
 echo ""
 
 # Create logs directory if it doesn't exist
-mkdir -p logs
+mkdir -p "$ROOT_DIR/logs"
+
+# Change to docker directory for docker-compose
+cd "$SCRIPT_DIR"
 
 # Build and start services
 docker-compose up --build -d

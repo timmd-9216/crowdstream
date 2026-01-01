@@ -8,9 +8,13 @@ set -e
 echo "=== Setting up All Virtual Environments ==="
 echo ""
 
-# Change to script directory
-cd "$(dirname "$0")"
-BASE_DIR=$(pwd)
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root directory
+cd "$ROOT_DIR"
+BASE_DIR="$ROOT_DIR"
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
@@ -84,7 +88,7 @@ if [ $SUCCESS -eq $TOTAL ]; then
     echo "  • dance_movement_detector/venv"
     echo ""
     echo "To start services:"
-    echo "  ./start-all-services.sh --visualizer cosmic_skeleton_standalone"
+    echo "  ./scripts/start-all-services.sh --visualizer cosmic_skeleton_standalone"
     echo ""
     echo "Note: For Raspberry Pi, use setup-venvs-rpi.sh instead"
     exit 0

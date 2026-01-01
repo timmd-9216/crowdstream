@@ -5,7 +5,7 @@ Quick guide to get maximum performance on Raspberry Pi 4.
 ## Quick Start (One Command)
 
 ```bash
-./optimize-for-rpi.sh
+./scripts/optimize-for-rpi.sh
 ```
 
 This will:

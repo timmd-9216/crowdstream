@@ -127,15 +127,15 @@ else
 fi
 echo ""
 
-# Change to script directory and save root directory (parent of scripts/)
-cd "$(dirname "$0")"
-ROOT_DIR=$(cd .. && pwd)
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$ROOT_DIR/logs"
 
 # Kill any existing services first
 echo "Stopping any existing services..."
 cd "$ROOT_DIR"
-./kill-all-services.sh
+"$SCRIPT_DIR/kill-all-services.sh"
 sleep_if_rpi 2
 
 echo ""

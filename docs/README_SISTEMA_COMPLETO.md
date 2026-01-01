@@ -9,7 +9,7 @@ Sistema completo para detectar y visualizar movimiento de bailarines usando YOLO
 Cada servicio tiene su propio entorno virtual. Para instalar todos:
 
 ```bash
-./setup-all-venvs.sh
+./scripts/setup-all-venvs.sh
 ```
 
 Este script crea los entornos virtuales para:
@@ -28,7 +28,7 @@ Cada servicio también puede instalarse individualmente ejecutando `./install.sh
 Para iniciar el detector de movimiento, visualizador skeleton y dashboard de monitoreo:
 
 ```bash
-./perfo-start.sh
+./scripts/perfo-start.sh
 ```
 
 Este script inicia:
@@ -59,7 +59,7 @@ Este script inicia:
 
 ### Detener todo
 ```bash
-./kill-all-services.sh
+./scripts/kill-all-services.sh
 cd audio-mixer && ./kill_audio.sh
 ```
 
@@ -195,9 +195,9 @@ python3 src/dance_movement_detector.py \
 
 ### "Address already in use"
 ```bash
-./kill-all-services.sh
+./scripts/kill-all-services.sh
 # Espera 2 segundos
-./start-all-services.sh
+./scripts/start-all-services.sh
 ```
 
 ### El detector no detecta movimiento
@@ -248,7 +248,7 @@ lsof -i:8090
 }
 
 # En Raspberry Pi
-./start-all-services.sh
+./scripts/start-all-services.sh
 # Abrir visualizer en fullscreen en el proyector
 ```
 
@@ -256,10 +256,10 @@ lsof -i:8090
 
 ```bash
 # Iniciar todo
-./start-all-services.sh
+./scripts/start-all-services.sh
 
 # Detener todo
-./kill-all-services.sh
+./scripts/kill-all-services.sh
 
 # Ver logs
 tail -f logs/detector.log
@@ -268,7 +268,7 @@ tail -f logs/detector.log
 rm logs/*.log
 
 # Reiniciar un servicio específico
-./kill-all-services.sh
+./scripts/kill-all-services.sh
 cd dance_visualizer
 ./start.sh --osc-port 5006
 ```
@@ -323,8 +323,8 @@ Ver [MAPPING_CONFIG.md](MAPPING_CONFIG.md) para crear mapeos personalizados.
 ## 🤝 Contribuir
 
 1. Documentar cambios en README correspondiente
-2. Probar con `./start-all-services.sh`
-3. Verificar que `./kill-all-services.sh` funcione
+2. Probar con `./scripts/start-all-services.sh`
+3. Verificar que `./scripts/kill-all-services.sh` funcione
 
 ## 📜 Licencia
 

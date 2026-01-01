@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   crowdstream-services:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: crowdstream-all-services
     ports:
       - "8082:8082"  # Dashboard
@@ -10,7 +12,7 @@ services:
     devices:
       - /dev/video0:/dev/video0  # Webcam access
     volumes:
-      - ./logs:/app/logs
+      - ../logs:/app/logs
       - /tmp/.X11-unix:/tmp/.X11-unix  # For X11 display if needed
     environment:
       - DISPLAY=${DISPLAY}

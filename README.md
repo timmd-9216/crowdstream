@@ -9,7 +9,7 @@ A complete system for detecting dancer movement using YOLO v8, with real-time vi
 Each service has its own virtual environment. To install all of them:
 
 ```bash
-./setup-all-venvs.sh
+./scripts/setup-all-venvs.sh
 ```
 
 This script creates virtual environments for:
@@ -28,7 +28,7 @@ Each service can also be installed individually by running `./install.sh` inside
 To start the movement detector, skeleton visualizer, and monitoring dashboard:
 
 ```bash
-./perfo-start.sh
+./scripts/perfo-start.sh
 ```
 
 This script starts:
@@ -60,9 +60,26 @@ This script starts:
 ### Stopping All Services
 
 ```bash
-./kill-all-services.sh
+./scripts/kill-all-services.sh
 cd audio-mixer && ./kill_audio.sh
 ```
+
+### Docker Deployment
+
+To run all services in Docker containers:
+
+```bash
+cd docker
+./docker-start.sh
+```
+
+Or from the project root:
+
+```bash
+./docker/docker-start.sh
+```
+
+See [docker/README.md](docker/README.md) for detailed Docker documentation.
 
 ## 📁 System Components
 
@@ -150,9 +167,9 @@ Only one service can listen on a port at a time. Therefore:
 
 ### "Address already in use"
 ```bash
-./kill-all-services.sh
+./scripts/kill-all-services.sh
 # Wait 2 seconds
-./perfo-start.sh
+./scripts/perfo-start.sh
 ```
 
 ### Detector not detecting movement

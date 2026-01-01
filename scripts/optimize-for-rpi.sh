@@ -9,7 +9,11 @@ echo "🚀 CrowdStream Raspberry Pi 4 Optimizer"
 echo "========================================"
 echo ""
 
-cd "$(dirname "$0")"
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$ROOT_DIR"
 
 # Check if already optimized
 if [ -d "yolov8n-pose_saved_model" ]; then
@@ -45,11 +49,11 @@ echo ""
 echo "📝 Step 2/3: Configuring detector for TFLite..."
 
 # Update start-all-services.sh to use TFLite config by default on RPi
-if grep -q "raspberry_pi_optimized.json" start-all-services.sh; then
-    sed -i.bak 's/raspberry_pi_optimized\.json/raspberry_pi_tflite.json/g' start-all-services.sh
-    echo "   ✅ Updated start-all-services.sh"
+if grep -q "raspberry_pi_optimized.json" "$SCRIPT_DIR/start-all-services.sh"; then
+    sed -i.bak 's/raspberry_pi_optimized\.json/raspberry_pi_tflite.json/g' "$SCRIPT_DIR/start-all-services.sh"
+    echo "   ✅ Updated scripts/start-all-services.sh"
 else
-    echo "   ⚠️  Could not auto-update start-all-services.sh"
+    echo "   ⚠️  Could not auto-update scripts/start-all-services.sh"
     echo "      Manual step: Edit and change config to raspberry_pi_tflite.json"
 fi
 
@@ -78,7 +82,7 @@ echo "Model location:"
 echo "  yolov8n-pose_saved_model/yolov8n-pose_int8.tflite"
 echo ""
 echo "To run optimized:"
-echo "  ./start-all-services.sh --visualizer cosmic_skeleton"
+echo "  ./scripts/start-all-services.sh --visualizer cosmic_skeleton"
 echo ""
 echo "To test standalone:"
 echo "  cd dance_movement_detector"

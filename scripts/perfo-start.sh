@@ -1,11 +1,17 @@
 #!/bin/bash
 
-./kill-all-services.sh
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$ROOT_DIR"
+
+"$SCRIPT_DIR/kill-all-services.sh"
 
 # Iniciar todos los servicios
-#./start-all-services.sh --visualizer cosmic_skeleton --no-dashboard
-./start-all-services.sh --visualizer cosmic_skeleton
-#./start-all-services.sh  --visualizer cosmic_skeleton_standalone --no-dashboard 
+#"$SCRIPT_DIR/start-all-services.sh" --visualizer cosmic_skeleton --no-dashboard
+"$SCRIPT_DIR/start-all-services.sh" --visualizer cosmic_skeleton
+#"$SCRIPT_DIR/start-all-services.sh"  --visualizer cosmic_skeleton_standalone --no-dashboard 
 
 # Detectar el sistema operativo
 OS="$(uname -s)"
@@ -22,16 +28,16 @@ elif [[ "$OS" == "Linux" ]]; then
     if [[ "$ARCH" == "arm"* ]] || [[ "$ARCH" == "aarch64" ]]; then
         # Raspberry Pi (ARM)
         echo "Detectado Raspberry Pi, iniciando Chrome..."
-        ./start-chrome.sh 8094 &
+        "$SCRIPT_DIR/start-chrome.sh" 8094 &
     else
         # Otro Linux
         echo "Detectado Linux, iniciando Chrome..."
-        ./start-chrome.sh 8091 &
+        "$SCRIPT_DIR/start-chrome.sh" 8091 &
     fi
 else
     echo "Sistema operativo no reconocido: $OS"
     echo "Intentando abrir Chrome en el puerto 8091..."
-    ./start-chrome.sh 8091 &
+    "$SCRIPT_DIR/start-chrome.sh" 8091 &
 fi
 
 #old

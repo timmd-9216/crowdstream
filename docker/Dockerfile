@@ -14,12 +14,15 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
+# Create scripts directory
+RUN mkdir -p /app/scripts
+
 # Copy all service directories
 COPY dance_movement_detector/ /app/dance_movement_detector/
 COPY movement_dashboard/ /app/movement_dashboard/
-COPY cosmic_journey/ /app/cosmic_journey/
-COPY kill-all-services.sh /app/
-COPY start-all-services.sh /app/
+COPY visualizers/ /app/visualizers/
+COPY scripts/kill-all-services.sh /app/scripts/kill-all-services.sh
+COPY scripts/start-all-services.sh /app/scripts/start-all-services.sh
 
 # Install Python dependencies for all services
 RUN pip install --no-cache-dir \
@@ -38,7 +41,7 @@ RUN pip install --no-cache-dir \
 RUN mkdir -p /app/logs
 
 # Make scripts executable
-RUN chmod +x /app/start-all-services.sh /app/kill-all-services.sh
+RUN chmod +x /app/scripts/start-all-services.sh /app/scripts/kill-all-services.sh
 
 # Expose ports for web services
 # 8082 - Dashboard
@@ -46,4 +49,4 @@ RUN chmod +x /app/start-all-services.sh /app/kill-all-services.sh
 EXPOSE 8082 8091
 
 # Start all services
-CMD ["/bin/bash", "/app/start-all-services.sh"]
+CMD ["/bin/bash", "/app/scripts/start-all-services.sh"]
