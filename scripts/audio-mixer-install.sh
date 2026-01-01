@@ -5,8 +5,13 @@
 
 set -e
 
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+AUDIO_MIXER_DIR="$ROOT_DIR/audio-mixer"
+
 echo "🎵 Installing Audio Engine dependencies..."
-cd "$(dirname "$0")"
+cd "$AUDIO_MIXER_DIR"
 
 # Remove existing venv if present
 if [ -d "venv" ]; then

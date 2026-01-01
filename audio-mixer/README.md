@@ -140,7 +140,7 @@ If you experience **audio glitches, stuttering, or high CPU usage** when EQ filt
 - Real-time EQ processing can cause audio dropouts and exceed CPU budget
 - If you enabled them with `--enable-filters` and experience issues, disable them:
   ```bash
-  # Remove --enable-filters flag from audio-mix-start.sh
+  # Remove --enable-filters flag from scripts/audio-mix-start.sh
   python audio_server.py --port 57122  # Without --enable-filters
   ```
 - For better performance, use optimized filters (requires scipy):

@@ -132,7 +132,7 @@ Real-time EQ filters (3-band: low/mid/high) require significant CPU resources:
 - **EQ filters are disabled by default** on Raspberry Pi
 - If you enabled them with `--enable-filters` and experience issues:
   ```bash
-  # Remove --enable-filters flag from audio-mix-start.sh
+  # Remove --enable-filters flag from scripts/audio-mix-start.sh
   python audio_server.py --port 57122  # Without --enable-filters
   ```
 - For better performance, use optimized filters (requires scipy):

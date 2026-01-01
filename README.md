@@ -46,7 +46,7 @@ The audio mixer receives movement messages (just like the visualizers) and adjus
 
 ```bash
 cd audio-mixer
-./audio-mix-start.sh
+./scripts/audio-mix-start.sh
 ```
 
 This script starts:
@@ -61,7 +61,7 @@ This script starts:
 
 ```bash
 ./scripts/kill-all-services.sh
-cd audio-mixer && ./kill_audio.sh
+./scripts/kill_audio.sh
 ```
 
 ### Docker Deployment

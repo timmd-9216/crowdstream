@@ -2,15 +2,23 @@
 # Fix PyAudio in venv by adding system packages path
 # Run this if PyAudio import fails after setup
 
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+AUDIO_MIXER_DIR="$ROOT_DIR/audio-mixer"
+
 echo "🔧 Fixing PyAudio for Raspberry Pi venv..."
 echo ""
 
 # Check if venv exists
-if [ ! -d "venv" ]; then
+if [ ! -d "$AUDIO_MIXER_DIR/venv" ]; then
     echo "❌ Virtual environment not found"
-    echo "Please run ./setup_venv_rpi.sh first"
+    echo "Please run ./scripts/audio-mixer-install.sh first"
     exit 1
 fi
+
+# Change to audio-mixer directory
+cd "$AUDIO_MIXER_DIR"
 
 # Activate venv
 source venv/bin/activate

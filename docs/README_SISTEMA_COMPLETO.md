@@ -46,7 +46,7 @@ El mezclador de audio recibe mensajes de movimiento (al igual que las visuales) 
 
 ```bash
 cd audio-mixer
-./audio-mix-start.sh
+./scripts/audio-mix-start.sh
 ```
 
 Este script inicia:
@@ -60,7 +60,7 @@ Este script inicia:
 ### Detener todo
 ```bash
 ./scripts/kill-all-services.sh
-cd audio-mixer && ./kill_audio.sh
+./scripts/kill_audio.sh
 ```
 
 ## 📁 Componentes del Sistema
