@@ -10,6 +10,8 @@ import numpy as np
 from ultralytics import YOLO
 import time
 import json
+import platform
+import torch
 from collections import defaultdict, deque
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Tuple
@@ -137,6 +139,10 @@ class DanceMovementDetector:
 
         self.tracker = BodyPartTracker(history_size=config.get('history_frames', 10))
 
+        # Device detection for optimal performance
+        self.device = self._detect_device()
+        self.use_half = self._should_use_half()
+
         # OSC clients for sending messages (support multiple destinations)
         self.osc_clients = []
         self.osc_destinations = []
@@ -168,6 +174,53 @@ class DanceMovementDetector:
         self.video_source = config.get('video_source', 0)
         self.cap = None
 
+    def _detect_device(self) -> str:
+        """Detect the best device for YOLO inference based on platform"""
+        # Allow override from config
+        device_override = self.config.get('device', None)
+        if device_override:
+            return device_override
+
+        # Detect platform
+        system = platform.system()
+        
+        if system == 'Darwin':  # macOS
+            # Check if MPS (Metal Performance Shaders) is available for Apple Silicon
+            if torch.backends.mps.is_available():
+                return 'mps'
+            else:
+                # Mac Intel or MPS not available - let YOLO auto-detect
+                return None  # None = auto-detect
+        elif system == 'Linux':
+            # Raspberry Pi or other Linux - use CPU
+            return 'cpu'
+        else:
+            # Windows or other - let YOLO auto-detect (will use CUDA if available)
+            return None
+
+    def _should_use_half(self) -> bool:
+        """Determine if FP16 (half precision) should be used"""
+        # Allow override from config
+        half_override = self.config.get('half', None)
+        if half_override is not None:
+            return half_override
+
+        # FP16 is beneficial on:
+        # - Apple Silicon Macs with MPS
+        # - NVIDIA GPUs with CUDA
+        # Not recommended on CPU
+        if self.device == 'mps':
+            return True  # MPS supports FP16 well
+        elif self.device == 'cpu':
+            return False  # CPU doesn't benefit from FP16
+        elif self.device is None:
+            # Auto-detect: check if CUDA is available
+            if torch.cuda.is_available():
+                return True
+            return False
+        else:
+            return False
+
     def start(self):
         """Start detection and analysis"""
         self.cap = cv2.VideoCapture(self.video_source)
@@ -191,6 +244,8 @@ class DanceMovementDetector:
 
         print(f"Starting dance movement detection...")
         print(f"Video source: {self.video_source}")
+        device_info = self.device if self.device else "auto-detect"
+        print(f"Device: {device_info} | FP16: {self.use_half}")
         print(f"Message interval: {self.message_interval}s")
         print(f"OSC destinations ({len(self.osc_destinations)}):")
         for i, dest in enumerate(self.osc_destinations, 1):
@@ -227,17 +282,21 @@ class DanceMovementDetector:
             h, w = frame.shape[:2]
 
             # Run YOLO pose detection with optimizations
-            results = self.model.track(
-                frame,
-                persist=True,
-                verbose=False,
-                imgsz=self.imgsz,
-                conf=self.conf_threshold,
-                iou=self.iou_threshold,
-                max_det=self.max_det,
-                device='cpu',  # Force CPU on Raspberry Pi
-                half=False  # No FP16 on CPU
-            )
+            track_kwargs = {
+                'persist': True,
+                'verbose': False,
+                'imgsz': self.imgsz,
+                'conf': self.conf_threshold,
+                'iou': self.iou_threshold,
+                'max_det': self.max_det,
+                'half': self.use_half
+            }
+            
+            # Only set device if explicitly specified (None = auto-detect)
+            if self.device is not None:
+                track_kwargs['device'] = self.device
+            
+            results = self.model.track(frame, **track_kwargs)
 
             if results[0].keypoints is not None:
                 # Extract keypoints and IDs efficiently
