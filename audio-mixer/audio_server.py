@@ -1305,7 +1305,48 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=57120, help="OSC port (default: 57120)")
     parser.add_argument("--device", type=int, help="Audio device ID")
     parser.add_argument("--buffer-size", type=int, default=1024, help="Audio buffer size in frames (default: 1024 for Raspberry Pi). Lower=less latency, higher=more stable. Try 512/1024/2048.")
-    # Detect Raspberry Pi to set default filter behavior
+    def _detect_mac_model() -> Optional[str]:  # type: ignore
+        """Detect Mac model (M1, M2, M2 Pro, etc.)"""
+        if platform.system() != 'Darwin':  # macOS
+            return None
+        
+        try:
+            import subprocess
+            # Get CPU brand string
+            result = subprocess.run(
+                ['sysctl', '-n', 'machdep.cpu.brand_string'],
+                capture_output=True,
+                text=True,
+                timeout=1
+            )
+            if result.returncode == 0:
+                brand = result.stdout.strip()
+                # Check for Apple Silicon models
+                if 'Apple M1' in brand:
+                    return 'M1'
+                elif 'Apple M2' in brand:
+                    # Check for Pro/Max/Ultra variants
+                    if 'Pro' in brand or 'Max' in brand or 'Ultra' in brand:
+                        return 'M2_Pro'
+                    else:
+                        return 'M2'
+                elif 'Apple M3' in brand:
+                    # M3 Pro/Max/Ultra variants are considered high-end
+                    if 'Pro' in brand or 'Max' in brand or 'Ultra' in brand:
+                        return 'M3_Pro'
+                    else:
+                        return 'M3'
+                elif 'Apple M4' in brand:
+                    # M4 Pro/Max/Ultra variants are considered high-end
+                    if 'Pro' in brand or 'Max' in brand or 'Ultra' in brand:
+                        return 'M3_Pro'  # Use same category as M3 Pro
+                    else:
+                        return 'M3'  # Use same category as M3 base
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+            pass
+        
+        return None
+    
     def _is_raspberry_pi() -> bool:
         """Detect if running on Raspberry Pi"""
         try:
@@ -1335,9 +1376,25 @@ def main() -> None:
         
         return False
     
-    # Default: enable filters on desktop/laptop, disable on Raspberry Pi
-    default_enable_filters = not _is_raspberry_pi()
-    default_status = "ON (enabled on desktop/laptop)" if default_enable_filters else "OFF (disabled on Raspberry Pi)"
+    # Detect Mac model and set default filter behavior
+    mac_model = _detect_mac_model()
+    if mac_model == 'M1':
+        default_enable_filters = False
+        default_status = "OFF (disabled by default on M1, use --enable-filters to enable)"
+        print("⚠️  WARNING: Mac M1 detected - EQ filters disabled by default for performance")
+    elif mac_model in ('M2_Pro', 'M3_Pro'):
+        default_enable_filters = True
+        default_status = "ON (enabled by default on M2 Pro/Max/Ultra or M3 Pro+)"
+        print(f"⚠️  WARNING: Mac {mac_model.replace('_', ' ')} detected - EQ filters enabled by default")
+    elif mac_model in ('M2', 'M3'):
+        # M2/M3 base models: disable by default (conservative)
+        default_enable_filters = False
+        default_status = "OFF (disabled by default on M2/M3, use --enable-filters to enable)"
+        print(f"⚠️  WARNING: Mac {mac_model} detected - EQ filters disabled by default (use --enable-filters for M2 Pro+)")
+    else:
+        # Default: disabled for all other platforms
+        default_enable_filters = False
+        default_status = "OFF (disabled by default, use --enable-filters to enable)"
     
     parser.add_argument("--enable-filters", action="store_true", 
                        help=f"Enable 3-band EQ filters (default: {default_status})")

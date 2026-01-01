@@ -45,31 +45,9 @@ fi
 # Ensure we're in the audio-mixer directory for relative paths to work
 cd "$SCRIPT_DIR"
 
-# Detect if running on Raspberry Pi
-# Check for Raspberry Pi by looking at /proc/cpuinfo or /sys/firmware/devicetree/base/model
-IS_RASPBERRY_PI=false
-if [ -f /proc/cpuinfo ]; then
-    if grep -q "Raspberry Pi" /proc/cpuinfo 2>/dev/null || grep -q "BCM" /proc/cpuinfo 2>/dev/null; then
-        IS_RASPBERRY_PI=true
-    fi
-fi
-if [ -f /sys/firmware/devicetree/base/model ]; then
-    if grep -qi "raspberry" /sys/firmware/devicetree/base/model 2>/dev/null; then
-        IS_RASPBERRY_PI=true
-    fi
-fi
-
-# Enable filters by default, except on Raspberry Pi (for performance)
-FILTERS_FLAG=""
-if [ "$IS_RASPBERRY_PI" = false ]; then
-    FILTERS_FLAG="--enable-filters"
-    echo "🖥️  Desktop/Laptop detected: Enabling 3-band EQ filters by default"
-else
-    echo "🍓 Raspberry Pi detected: Filters disabled by default (use --enable-filters to enable)"
-fi
-
 # Run audio_server.py from current directory (audio-mixer/)
-python audio_server.py --port 57122 $FILTERS_FLAG &
+# Filters are disabled by default (use --enable-filters to enable)
+python audio_server.py --port 57122 &
 sleep 8  # Wait for audio server to fully initialize (ALSA probing takes time)
 sleep 2
 
