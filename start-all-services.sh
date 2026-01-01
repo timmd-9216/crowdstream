@@ -104,8 +104,9 @@ else
 fi
 echo ""
 
-# Change to script directory
+# Change to script directory and save root directory
 cd "$(dirname "$0")"
+ROOT_DIR=$(pwd)
 
 # Kill any existing services first
 echo "Stopping any existing services..."
@@ -119,15 +120,14 @@ echo ""
 # Start Dashboard (optional)
 if [ "$START_DASHBOARD" = true ]; then
     echo "Starting FastAPI Dashboard..."
-    cd dance_dashboard_alt
+    cd "$ROOT_DIR/dance_dashboard_alt"
     if [ -d "venv" ]; then
-        venv/bin/python3 src/server.py --osc-port 5005 --web-port 8082 > ../logs/dashboard_alt.log 2>&1 &
+        venv/bin/python3 src/server.py --osc-port 5005 --web-port 8082 > "$ROOT_DIR/logs/dashboard_alt.log" 2>&1 &
     else
-        python3 src/server.py --osc-port 5005 --web-port 8082 > ../logs/dashboard_alt.log 2>&1 &
+        python3 src/server.py --osc-port 5005 --web-port 8082 > "$ROOT_DIR/logs/dashboard_alt.log" 2>&1 &
     fi
     DASHBOARD_PID=$!
     echo "  Dashboard started (PID: $DASHBOARD_PID) on http://localhost:8082"
-    cd ..
     sleep 2
 fi
 
@@ -135,87 +135,85 @@ fi
 echo "Starting $VISUALIZER..."
 case $VISUALIZER in
     cosmic_skeleton)
-        cd visualizers/cosmic_skeleton
+        cd "$ROOT_DIR/visualizers/cosmic_skeleton"
         if [ -d "venv" ]; then
-            venv/bin/python3 src/server.py --osc-port 5007 --port 8091 > ../../logs/cosmic_skeleton.log 2>&1 &
+            venv/bin/python3 src/server.py --osc-port 5007 --port 8091 > "$ROOT_DIR/logs/cosmic_skeleton.log" 2>&1 &
         else
-            python3 src/server.py --osc-port 5007 --port 8091 > ../../logs/cosmic_skeleton.log 2>&1 &
+            python3 src/server.py --osc-port 5007 --port 8091 > "$ROOT_DIR/logs/cosmic_skeleton.log" 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Cosmic Skeleton started (PID: $VISUALIZER_PID) on http://localhost:8091"
         VISUALIZER_LOG="cosmic_skeleton.log"
         ;;
     cosmic_skeleton_standalone)
-        cd visualizers/cosmic_skeleton_standalone
+        cd "$ROOT_DIR/visualizers/cosmic_skeleton_standalone"
         if [ -d "venv" ]; then
-            DISPLAY=:0 venv/bin/python3 src/server.py --port 8094 --source 0 --imgsz 416 > ../../logs/cosmic_standalone.log 2>&1 &
+            DISPLAY=:0 venv/bin/python3 src/server.py --port 8094 --source 0 --imgsz 416 > "$ROOT_DIR/logs/cosmic_standalone.log" 2>&1 &
         else
-            DISPLAY=:0 python3 src/server.py --port 8094 --source 0 --imgsz 416 > ../../logs/cosmic_standalone.log 2>&1 &
+            DISPLAY=:0 python3 src/server.py --port 8094 --source 0 --imgsz 416 > "$ROOT_DIR/logs/cosmic_standalone.log" 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Cosmic Skeleton Standalone started (PID: $VISUALIZER_PID) on http://localhost:8094"
         VISUALIZER_LOG="cosmic_standalone.log"
         ;;
     skeleton_visualizer)
-        cd visualizers/skeleton_visualizer
+        cd "$ROOT_DIR/visualizers/skeleton_visualizer"
         if [ -d "venv" ]; then
-            venv/bin/python3 src/server.py --osc-port 5007 --port 8093 > ../../logs/skeleton_visualizer.log 2>&1 &
+            venv/bin/python3 src/server.py --osc-port 5007 --port 8093 > "$ROOT_DIR/logs/skeleton_visualizer.log" 2>&1 &
         else
-            python3 src/server.py --osc-port 5007 --port 8093 > ../../logs/skeleton_visualizer.log 2>&1 &
+            python3 src/server.py --osc-port 5007 --port 8093 > "$ROOT_DIR/logs/skeleton_visualizer.log" 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Skeleton Visualizer started (PID: $VISUALIZER_PID) on http://localhost:8093"
         VISUALIZER_LOG="skeleton_visualizer.log"
         ;;
     cosmic_journey)
-        cd visualizers/cosmic_journey
+        cd "$ROOT_DIR/visualizers/cosmic_journey"
         if [ -d "venv" ]; then
-            venv/bin/python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > ../../logs/cosmic.log 2>&1 &
+            venv/bin/python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > "$ROOT_DIR/logs/cosmic.log" 2>&1 &
         else
-            python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > ../../logs/cosmic.log 2>&1 &
+            python3 src/cosmic_server.py --osc-port 5007 --web-port 8091 > "$ROOT_DIR/logs/cosmic.log" 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Cosmic Journey started (PID: $VISUALIZER_PID) on http://localhost:8091"
         VISUALIZER_LOG="cosmic.log"
         ;;
     space_visualizer)
-        cd visualizers/space_visualizer
+        cd "$ROOT_DIR/visualizers/space_visualizer"
         if [ -d "venv" ]; then
-            venv/bin/python3 src/visualizer_server.py > ../../logs/space.log 2>&1 &
+            venv/bin/python3 src/visualizer_server.py > "$ROOT_DIR/logs/space.log" 2>&1 &
         else
-            python3 src/visualizer_server.py > ../../logs/space.log 2>&1 &
+            python3 src/visualizer_server.py > "$ROOT_DIR/logs/space.log" 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Space Visualizer started (PID: $VISUALIZER_PID)"
         VISUALIZER_LOG="space.log"
         ;;
     blur_skeleton)
-        cd visualizers/blur_skeleton_visualizer
+        cd "$ROOT_DIR/visualizers/blur_skeleton_visualizer"
         if [ -d "venv" ]; then
-            venv/bin/python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > ../../logs/blur.log 2>&1 &
+            venv/bin/python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > "$ROOT_DIR/logs/blur.log" 2>&1 &
         else
-            python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > ../../logs/blur.log 2>&1 &
+            python3 src/server.py --osc-port 5009 --port 8092 --blur 51 > "$ROOT_DIR/logs/blur.log" 2>&1 &
         fi
         VISUALIZER_PID=$!
         echo "  Blur Skeleton started (PID: $VISUALIZER_PID) on http://localhost:8092"
         VISUALIZER_LOG="blur.log"
         ;;
 esac
-cd ..
 sleep 2
 
 # Start Detector (only if not standalone)
 if [ "$IS_STANDALONE" = false ]; then
     echo "Starting Movement Detector..."
-    cd dance_movement_detector
+    cd "$ROOT_DIR/dance_movement_detector"
     if [ -d "venv" ]; then
-        DISPLAY=:0 venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/raspberry_pi_optimized.json > ../logs/detector.log 2>&1 &
+        DISPLAY=:0 venv/bin/python3 src/dance_movement_detector.py --interval 1 --config config/raspberry_pi_optimized.json > "$ROOT_DIR/logs/detector.log" 2>&1 &
     else
-        DISPLAY=:0 python3 src/dance_movement_detector.py --config config/raspberry_pi_optimized.json > ../logs/detector.log 2>&1 &
+        DISPLAY=:0 python3 src/dance_movement_detector.py --config config/raspberry_pi_optimized.json > "$ROOT_DIR/logs/detector.log" 2>&1 &
     fi
     DETECTOR_PID=$!
     echo "  Detector started (PID: $DETECTOR_PID)"
-    cd ..
     sleep 2
 else
     echo "⏭️  Skipping external detector (visualizer has built-in YOLO)"

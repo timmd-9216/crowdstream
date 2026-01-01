@@ -14,6 +14,7 @@ if [[ "$OS" == "Darwin" ]]; then
     # macOS
     echo "Detectado macOS, abriendo Chrome..."
     open -a "Google Chrome" http://localhost:8091
+    open -a "Google Chrome" http://localhost:8082
 elif [[ "$OS" == "Linux" ]]; then
     # Linux (Raspberry Pi u otro)
     if [[ "$ARCH" == "arm"* ]] || [[ "$ARCH" == "aarch64" ]]; then
