@@ -26,7 +26,8 @@ audioread>=3.0.0
 
 # Time stretching and pitch shifting
 soxr>=0.3.0
-pyrubberband>=0.4.0  # Real-time time-stretch for BPM changes (requires system rubberband: brew install rubberband)
+audiotsm>=0.1.2  # Fast real-time time-stretch (WSOLA algorithm, no system deps)
+pyrubberband>=0.4.0  # High-quality time-stretch fallback (requires: brew install rubberband)
 
 # Caching and utilities
 pooch>=1.7.0

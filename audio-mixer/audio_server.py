@@ -21,6 +21,16 @@ from pathlib import Path
 from typing import Dict, Optional, Any, Tuple, Union
 
 import numpy as np
+
+# Time-stretch libraries (audiotsm is faster, pyrubberband is higher quality)
+try:
+    import audiotsm
+    from audiotsm import wsola
+    from audiotsm.io.array import ArrayReader, ArrayWriter
+    AUDIOTSM_AVAILABLE = True
+except Exception:  # pragma: no cover - optional dependency
+    AUDIOTSM_AVAILABLE = False
+
 try:
     import pyrubberband as pyrb
 except Exception:  # pragma: no cover - optional dependency
@@ -490,7 +500,21 @@ class PythonAudioServer:
         self.target_bpm = 120.0  # Target BPM for smooth interpolation
         self.current_bpm = 120.0  # Current BPM (for smooth transitions)
         self.time_stretch_ratio = 1.0
-        self.enable_time_stretch = enable_time_stretch and pyrb is not None
+        
+        # Time-stretch engine selection: audiotsm (fast) or pyrubberband (quality)
+        # audiotsm uses WSOLA algorithm - ~5-10x faster, good for real-time
+        # pyrubberband uses rubber-band library - higher quality, more CPU
+        self.use_audiotsm = AUDIOTSM_AVAILABLE  # Prefer audiotsm for performance
+        if AUDIOTSM_AVAILABLE:
+            self.enable_time_stretch = enable_time_stretch
+            print("🚀 Time-stretch: using audiotsm (WSOLA) - fast, low CPU")
+        elif pyrb is not None:
+            self.enable_time_stretch = enable_time_stretch
+            self.use_audiotsm = False
+            print("🎵 Time-stretch: using pyrubberband - high quality, more CPU")
+        else:
+            self.enable_time_stretch = False
+            print("⚠️  Time-stretch: disabled (no audiotsm or pyrubberband available)")
         
         # Movement-based BPM control (continuous adjustment system)
         self.movement_bpm_enabled = True
@@ -656,8 +680,22 @@ class PythonAudioServer:
                 to_process = self.stretch_input_buffer[:take_size]
                 self.stretch_input_buffer = self.stretch_input_buffer[take_size:]
                 
-                # Apply time-stretch
-                stretched = pyrb.time_stretch(to_process, self.sample_rate, ratio)
+                # Apply time-stretch using selected engine
+                if self.use_audiotsm:
+                    # audiotsm uses speed factor (inverse of ratio)
+                    # ratio < 1 = slow down audio = speed < 1
+                    speed = ratio  # audiotsm speed: 0.5 = half speed, 2.0 = double speed
+                    # audiotsm expects channels-first format: (channels, samples)
+                    channels_first = to_process.T  # (samples, 2) -> (2, samples)
+                    reader = ArrayReader(channels_first)
+                    writer = ArrayWriter(channels=2)
+                    tsm = wsola(reader.channels, speed=speed)
+                    tsm.run(reader, writer)
+                    # Convert back to (samples, channels) format
+                    stretched = writer.data.T.astype(np.float32)
+                else:
+                    # pyrubberband fallback
+                    stretched = pyrb.time_stretch(to_process, self.sample_rate, ratio)
                 
                 # Add to output buffer
                 if self.stretch_output_buffer.shape[0] > 0:

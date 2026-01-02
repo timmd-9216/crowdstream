@@ -68,23 +68,31 @@ python audio_server.py --port 57122
 
 #### Requirements for Time-Stretch
 
-For BPM changes to actually affect audio playback speed, you need:
+The system supports two time-stretch engines:
 
-1. **pyrubberband** (Python package - included in requirements.txt)
-2. **rubberband** (system library)
+| Engine | Speed | Quality | Dependencies |
+|--------|-------|---------|--------------|
+| **audiotsm** (default) | ⚡⚡⚡ Very fast | Good | Python only, no system deps |
+| **pyrubberband** (fallback) | ⚡ Slower | Excellent | Requires system library |
+
+**audiotsm** uses the WSOLA (Waveform Similarity Overlap-Add) algorithm - ideal for real-time with low CPU usage.
+
+```bash
+# Both are in requirements.txt, just install:
+pip install -r requirements.txt
+```
+
+**Optional: Install rubberband for high-quality fallback:**
 
 ```bash
 # macOS
 brew install rubberband
 
-# Ubuntu/Debian
-sudo apt-get install rubberband-cli
-
-# Raspberry Pi
+# Ubuntu/Debian / Raspberry Pi
 sudo apt-get install rubberband-cli
 ```
 
-Without rubberband, BPM changes will only affect the internal clock but not the actual audio playback speed.
+The system automatically selects audiotsm if available, falling back to pyrubberband.
 
 #### Time-Stretch Buffer Strategy
 
