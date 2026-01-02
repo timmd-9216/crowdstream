@@ -444,6 +444,17 @@ class PythonAudioServer:
         self.chunk_size = chunk_size  # Default 1024 for Raspberry Pi stability
         self.channels = 2
         self.enable_filters = enable_filters  # Filters are CPU-intensive on RPi
+        
+        # Time-stretch buffer for more efficient processing
+        # Accumulate multiple chunks before processing to reduce overhead
+        # Larger buffer = better quality, more latency
+        # 16 chunks @ 1024 samples = 16384 samples = ~370ms buffer
+        self.stretch_buffer_size = chunk_size * 16  # Process 16 chunks at a time (~370ms)
+        self.stretch_input_buffer = np.zeros((0, 2), dtype=np.float32)
+        self.stretch_output_buffer = np.zeros((0, 2), dtype=np.float32)
+        # Overrun tracking
+        self.stretch_underrun_count = 0
+        self.stretch_last_underrun_log = 0.0
 
         self.buffers: Dict[int, AudioBuffer] = {}
         self.active_players: Dict[int, StemPlayer] = {}
@@ -580,18 +591,60 @@ class PythonAudioServer:
             print(f"❌ Failed to open audio stream: {exc}")
 
     def _apply_time_stretch(self, mix: np.ndarray, ratio: float) -> np.ndarray:
+        """Apply time-stretch with buffering for efficiency.
+        
+        Accumulates audio into a larger buffer before processing to reduce
+        pyrubberband overhead and improve audio quality.
+        """
         if not self.enable_time_stretch or pyrb is None:
             return mix
         if abs(ratio - 1.0) < 0.001:
+            # No stretch needed, but still need to handle any buffered output
+            if self.stretch_output_buffer.shape[0] >= self.chunk_size:
+                output = self.stretch_output_buffer[:self.chunk_size]
+                self.stretch_output_buffer = self.stretch_output_buffer[self.chunk_size:]
+                return output.astype(np.float32)
             return mix
+        
         try:
-            stretched = pyrb.time_stretch(mix, self.sample_rate, ratio)
-            if stretched.shape[0] < self.chunk_size:
-                pad = np.zeros((self.chunk_size - stretched.shape[0], stretched.shape[1]), dtype=np.float32)
-                stretched = np.vstack((stretched, pad))
-            elif stretched.shape[0] > self.chunk_size:
-                stretched = stretched[: self.chunk_size]
-            return stretched.astype(np.float32)
+            # Add incoming audio to input buffer
+            self.stretch_input_buffer = np.vstack((self.stretch_input_buffer, mix)) if self.stretch_input_buffer.shape[0] > 0 else mix
+            
+            # Process when we have enough input AND need more output
+            while self.stretch_input_buffer.shape[0] >= self.stretch_buffer_size and self.stretch_output_buffer.shape[0] < self.chunk_size * 2:
+                # Take a larger chunk for processing
+                to_process = self.stretch_input_buffer[:self.stretch_buffer_size]
+                self.stretch_input_buffer = self.stretch_input_buffer[self.stretch_buffer_size:]
+                
+                # Apply time-stretch to larger buffer (more efficient)
+                stretched = pyrb.time_stretch(to_process, self.sample_rate, ratio)
+                
+                # Add to output buffer
+                if self.stretch_output_buffer.shape[0] > 0:
+                    self.stretch_output_buffer = np.vstack((self.stretch_output_buffer, stretched))
+                else:
+                    self.stretch_output_buffer = stretched
+            
+            # Return a chunk from output buffer if available
+            if self.stretch_output_buffer.shape[0] >= self.chunk_size:
+                output = self.stretch_output_buffer[:self.chunk_size]
+                self.stretch_output_buffer = self.stretch_output_buffer[self.chunk_size:]
+                return output.astype(np.float32)
+            else:
+                # Not enough output yet - this is an underrun
+                self.stretch_underrun_count += 1
+                now = time.time()
+                # Log underruns but not too frequently (max every 2 seconds)
+                if now - self.stretch_last_underrun_log >= 2.0:
+                    in_samples = self.stretch_input_buffer.shape[0]
+                    out_samples = self.stretch_output_buffer.shape[0]
+                    print(f"⚠️  Time-stretch UNDERRUN #{self.stretch_underrun_count}: "
+                          f"input={in_samples}/{self.stretch_buffer_size}, "
+                          f"output={out_samples}/{self.chunk_size} needed")
+                    self.stretch_last_underrun_log = now
+                # Return silence (will catch up)
+                return np.zeros((self.chunk_size, 2), dtype=np.float32)
+                
         except Exception as exc:  # pragma: no cover - runtime diagnostic
             if not self._time_stretch_warned:
                 print(f"⚠️  Time-stretch failed; disabling. ({exc})")
