@@ -86,6 +86,53 @@ sudo apt-get install rubberband-cli
 
 Without rubberband, BPM changes will only affect the internal clock but not the actual audio playback speed.
 
+#### Time-Stretch Buffer Strategy
+
+Real-time time-stretching is CPU-intensive. The audio server uses an **adaptive buffering strategy** to ensure smooth playback:
+
+**Buffer Architecture:**
+
+```
+Input Audio → [Input Buffer] → pyrubberband → [Output Buffer] → Audio Output
+                 (64 chunks)                    (86 chunks target)
+                  ~1.5s                           ~2s reserve
+```
+
+**Processing Modes:**
+
+| Output Level | Mode | Min Input to Process | Description |
+|--------------|------|---------------------|-------------|
+| < 4 chunks (~90ms) | 🔴 Emergency | 4 chunks (~90ms) | Minimum viable batch |
+| < 20 chunks (~0.5s) | 🟡 Urgent | 8 chunks (~185ms) | Smaller efficient batches |
+| < 43 chunks (~1s) | 🟢 Normal | 16 chunks (~370ms) | Standard processing |
+| ≥ 43 chunks (>1s) | ⚪ Relaxed | 64 chunks (~1.5s) | Maximum efficiency |
+
+**Latency:** ~2 seconds from input to output (acceptable for live DJ performance)
+
+**Why This Strategy:**
+
+1. **Larger batches are more efficient** - pyrubberband has overhead per call, so processing 32 chunks at once is faster than 32 separate calls
+2. **Output reserve prevents underruns** - keeping 8 chunks (~185ms) of processed audio ready ensures continuous playback
+3. **Emergency mode prevents silence** - when output runs low, we process smaller batches immediately (less efficient but avoids audio gaps)
+
+**Underrun Logging:**
+
+When the output buffer runs empty (underrun), the system logs:
+```
+⚠️  Time-stretch UNDERRUN #5: input=8192/32768, output=512/1024 needed
+```
+
+This shows:
+- `#5` - Total underrun count
+- `input=8192/32768` - Input buffer level vs full size
+- `output=512/1024` - Output buffer level vs chunk needed
+
+**Tuning:**
+
+If you experience frequent underruns:
+1. Increase `--buffer-size` (e.g., `--buffer-size 2048`)
+2. The time-stretch buffer will scale automatically (32x buffer-size)
+
 ### Recent Fixes
 
 - **Race condition fix**: `/start_group` now waits for buffers to load before starting playback ([details](AUDIO_SERVER_RACE_CONDITION_FIX.md))

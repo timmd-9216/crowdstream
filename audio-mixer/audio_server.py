@@ -448,12 +448,13 @@ class PythonAudioServer:
         # Time-stretch buffer for more efficient processing
         # Accumulate multiple chunks before processing to reduce overhead
         # Larger buffer = better quality, more latency
-        # 32 chunks @ 1024 samples = 32768 samples = ~740ms buffer
-        self.stretch_buffer_size = chunk_size * 32  # Process 32 chunks at a time (~740ms)
-        self.stretch_min_process_size = chunk_size * 8  # Minimum size to process in emergency
+        # 2 seconds of buffer @ 44100 Hz = ~88200 samples = ~86 chunks
+        # This provides ample headroom for time-stretch processing
+        self.stretch_buffer_size = chunk_size * 64  # Process 64 chunks at a time (~1.5s)
+        self.stretch_min_process_size = chunk_size * 16  # Minimum size for efficient processing
         self.stretch_input_buffer = np.zeros((0, 2), dtype=np.float32)
         self.stretch_output_buffer = np.zeros((0, 2), dtype=np.float32)
-        self.stretch_output_target = chunk_size * 8  # Keep 8 chunks of output ready
+        self.stretch_output_target = chunk_size * 86  # Keep ~2 seconds of output ready
         # Overrun tracking
         self.stretch_underrun_count = 0
         self.stretch_last_underrun_log = 0.0
@@ -593,10 +594,21 @@ class PythonAudioServer:
             print(f"❌ Failed to open audio stream: {exc}")
 
     def _apply_time_stretch(self, mix: np.ndarray, ratio: float) -> np.ndarray:
-        """Apply time-stretch with buffering for efficiency.
+        """Apply time-stretch with adaptive buffering for smooth real-time playback.
         
-        Accumulates audio into a larger buffer before processing to reduce
-        pyrubberband overhead and improve audio quality.
+        Buffer Strategy:
+        - Input Buffer: Accumulates audio before processing (32 chunks = ~740ms)
+        - Output Buffer: Stores processed audio ready for playback (target: 8 chunks = ~185ms)
+        
+        Processing Modes (based on output buffer level):
+        - Emergency (< 2 chunks): Process with just 4 chunks input
+        - Urgent (< 4 chunks): Process with 8 chunks input  
+        - Normal (< 8 chunks): Process with full 32 chunks input
+        
+        This adaptive approach:
+        - Uses large batches when possible (more CPU efficient)
+        - Falls back to smaller batches when output runs low (prevents underruns)
+        - Maintains reserve output buffer for smooth playback
         """
         if not self.enable_time_stretch or pyrb is None:
             return mix
@@ -617,22 +629,27 @@ class PythonAudioServer:
             output_level = self.stretch_output_buffer.shape[0]
             input_level = self.stretch_input_buffer.shape[0]
             
-            # Process loop - keep output buffer filled
+            # Process loop - keep output buffer filled to ~2 seconds
             while output_level < self.stretch_output_target:
-                # Determine process size based on urgency
-                if output_level < self.chunk_size * 2:
-                    # Emergency: process whatever we have (minimum 4 chunks)
-                    min_process = self.chunk_size * 4
-                elif output_level < self.chunk_size * 4:
-                    # Urgent: process with less input
-                    min_process = self.stretch_min_process_size
+                # With 2s buffer target, we can be patient and process efficiently
+                # Only process when we have enough input for quality output
+                if output_level < self.chunk_size * 20:
+                    # Below 0.5s of output - process with smaller batches
+                    min_process = self.chunk_size * 8  # ~185ms minimum
+                elif output_level < self.chunk_size * 43:
+                    # Below 1s of output - medium urgency
+                    min_process = self.stretch_min_process_size  # ~370ms
                 else:
-                    # Normal: wait for full buffer
-                    min_process = self.stretch_buffer_size
+                    # Above 1s of output - process with full efficiency
+                    min_process = self.stretch_buffer_size  # ~1.5s
                 
                 # Check if we have enough input
                 if input_level < min_process:
-                    break  # Not enough input yet
+                    # Only emergency if output is very low
+                    if output_level < self.chunk_size * 4 and input_level >= self.chunk_size * 4:
+                        min_process = self.chunk_size * 4  # Process 4 chunks minimum
+                    else:
+                        break  # Wait for more input
                 
                 # Take what we need (up to full buffer size)
                 take_size = min(input_level, self.stretch_buffer_size)
