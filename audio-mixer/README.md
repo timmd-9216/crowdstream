@@ -66,33 +66,58 @@ Both `audio_server.py` and `mixer_tracks.py` share this logic. The movement data
 python audio_server.py --port 57122
 ```
 
-#### Requirements for Time-Stretch
+#### BPM Control Methods
 
-The system supports two time-stretch engines:
+The system supports three methods for adjusting BPM in real-time:
 
-| Engine | Speed | Quality | Dependencies |
-|--------|-------|---------|--------------|
-| **audiotsm** (default) | ⚡⚡⚡ Very fast | Good | Python only, no system deps |
-| **pyrubberband** (fallback) | ⚡ Slower | Excellent | Requires system library |
+| Method | Speed | Pitch | CPU | Best For |
+|--------|-------|-------|-----|----------|
+| **playback_rate** (default) | ⚡⚡⚡ Fastest | Changes with speed | Minimal | DJ-style mixing, live performance |
+| **pyrubberband** | ⚡ Slow | Preserved | High | High-quality, pitch-critical content |
+| **audiotsm** | ⚡⚡ Fast | Preserved | Medium | Balance of quality and speed |
 
-**audiotsm** uses the WSOLA (Waveform Similarity Overlap-Add) algorithm - ideal for real-time with low CPU usage.
+**playback_rate** (Default):
+- Changes playback speed like a vinyl turntable
+- Pitch changes proportionally (±10% BPM = ±10% pitch)
+- Zero additional CPU usage
+- No dependencies required
+
+**pyrubberband** (High Quality):
+- Uses the Rubber Band library for time-stretch
+- Preserves original pitch while changing tempo
+- Requires system library installation
+
+**audiotsm** (Fast Time-Stretch):
+- Uses WSOLA algorithm for time-stretch  
+- Preserves pitch with minimal CPU
+- Pure Python, no system dependencies
+
+#### Configuring the Method
 
 ```bash
-# Both are in requirements.txt, just install:
-pip install -r requirements.txt
+# Default: playback_rate (fastest, slight pitch change)
+python audio_server.py --port 57122
+
+# High-quality time-stretch (preserves pitch)
+python audio_server.py --port 57122 --stretch-method pyrubberband
+
+# Fast time-stretch (WSOLA)
+python audio_server.py --port 57122 --stretch-method audiotsm
 ```
 
-**Optional: Install rubberband for high-quality fallback:**
+#### Installing Optional Dependencies
 
 ```bash
+# For pyrubberband:
 # macOS
 brew install rubberband
 
 # Ubuntu/Debian / Raspberry Pi
 sudo apt-get install rubberband-cli
-```
 
-The system automatically selects audiotsm if available, falling back to pyrubberband.
+# For audiotsm (already in requirements.txt):
+pip install audiotsm
+```
 
 #### Time-Stretch Buffer Strategy
 

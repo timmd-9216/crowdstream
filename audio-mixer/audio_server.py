@@ -501,20 +501,23 @@ class PythonAudioServer:
         self.current_bpm = 120.0  # Current BPM (for smooth transitions)
         self.time_stretch_ratio = 1.0
         
-        # Time-stretch engine selection: pyrubberband (quality, default) or audiotsm (fast)
-        # pyrubberband uses rubber-band library - higher quality, more CPU
-        # audiotsm uses WSOLA algorithm - faster but may have issues
-        self.use_audiotsm = False  # Default to pyrubberband for reliability
+        # BPM change methods (in order of preference):
+        # 1. "playback_rate" - Change read speed (like vinyl speed change) - fastest, slight pitch change
+        # 2. "pyrubberband" - High quality time-stretch, preserves pitch - more CPU
+        # 3. "audiotsm" - Fast WSOLA time-stretch - medium CPU
+        # Default: playback_rate (most efficient, works always)
+        self.stretch_method = "playback_rate"  # Default: simple rate change
+        self.use_audiotsm = False
+        self.enable_time_stretch = enable_time_stretch
+        
+        # Check available methods and log
+        available_methods = ["playback_rate"]
         if pyrb is not None:
-            self.enable_time_stretch = enable_time_stretch
-            print("🎵 Time-stretch: using pyrubberband - high quality")
-        elif AUDIOTSM_AVAILABLE:
-            self.enable_time_stretch = enable_time_stretch
-            self.use_audiotsm = True
-            print("🚀 Time-stretch: using audiotsm (WSOLA) - fast, low CPU")
-        else:
-            self.enable_time_stretch = False
-            print("⚠️  Time-stretch: disabled (no pyrubberband or audiotsm available)")
+            available_methods.append("pyrubberband")
+        if AUDIOTSM_AVAILABLE:
+            available_methods.append("audiotsm")
+        
+        print(f"🎵 BPM control: using {self.stretch_method} (available: {', '.join(available_methods)})")
         
         # Movement-based BPM control (continuous adjustment system)
         self.movement_bpm_enabled = True
@@ -787,6 +790,17 @@ class PythonAudioServer:
                 for buffer_id, player in list(self.active_players.items()):
                     if player.playing:
                         try:
+                            # Apply BPM ratio via playback rate if using that method
+                            if self.stretch_method == "playback_rate" and self.time_stretch_ratio != 1.0:
+                                # rate > 1 = read faster = higher pitch/faster playback
+                                # rate < 1 = read slower = lower pitch/slower playback
+                                # time_stretch_ratio = base_bpm / current_bpm
+                                # If current_bpm < base_bpm, ratio > 1, we need to slow down
+                                # So rate = 1/ratio = current_bpm / base_bpm
+                                player.rate = 1.0 / self.time_stretch_ratio
+                            else:
+                                player.rate = 1.0
+                            
                             chunk = player.get_audio_chunk(self.chunk_size)
                             if 100 <= buffer_id < 1100:
                                 deck_a_mix += chunk
@@ -816,7 +830,10 @@ class PythonAudioServer:
                     deck_d_mix * self.deck_d_volume
                 ) * self.master_volume
                 final_mix = np.tanh(final_mix * 0.9) * 0.9
-                final_mix = self._apply_time_stretch(final_mix, self.time_stretch_ratio)
+                
+                # Apply time-stretch only if using DSP methods (not playback_rate)
+                if self.stretch_method in ("pyrubberband", "audiotsm") and self.enable_time_stretch:
+                    final_mix = self._apply_time_stretch(final_mix, self.time_stretch_ratio)
 
                 if self.stream and self.stream.is_active():
                     self.stream.write(final_mix.astype(np.float32).tobytes())
@@ -1451,8 +1468,8 @@ class PythonAudioServer:
                 # ratio > 1 = slower (stretch), ratio < 1 = faster (compress)
                 # To slow down audio from base_bpm to lower current_bpm, we need ratio > 1
                 self.time_stretch_ratio = float(self.base_bpm) / float(bpm)
-            stretch_status = "ENABLED" if self.enable_time_stretch else "DISABLED"
-            print(f"⏱️  Tempo set to {bpm:.2f} BPM (ratio={self.time_stretch_ratio:.3f}, stretch={stretch_status})")
+            method_info = self.stretch_method if self.enable_time_stretch else "DISABLED"
+            print(f"⏱️  Tempo set to {bpm:.2f} BPM (ratio={self.time_stretch_ratio:.3f}, method={method_info})")
         except Exception as exc:  # pragma: no cover - runtime diagnostic
             print(f"❌ Error setting tempo: {exc}")
     
@@ -1681,7 +1698,11 @@ def main() -> None:
                        help="Explicitly disable filters (overrides default)")
     parser.add_argument("--optimized-filters", action="store_true", help="Use scipy-based optimized filters (50-100x faster, requires scipy)")
     parser.add_argument("--bpm", type=float, default=120.0, help="Initial tempo in BPM")
-    parser.add_argument("--disable-time-stretch", action="store_true", help="Disable real-time time-stretch")
+    parser.add_argument("--disable-time-stretch", action="store_true", help="Disable BPM control entirely")
+    parser.add_argument("--stretch-method", type=str, default="playback_rate",
+                       choices=["playback_rate", "pyrubberband", "audiotsm"],
+                       help="BPM control method: playback_rate (fast, pitch changes), "
+                            "pyrubberband (quality, preserves pitch), audiotsm (fast WSOLA)")
     parser.add_argument("--a", type=str, help="Path to audio file for Deck A (buffer 100)")
     parser.add_argument("--b", type=str, help="Path to audio file for Deck B (buffer 1100)")
     parser.add_argument("--rate", type=float, default=1.0, help="Playback rate for autoplay")
@@ -1728,6 +1749,17 @@ def main() -> None:
     server.target_bpm = args.bpm
     server.movement_bpm_max = args.bpm  # Set max BPM to initial BPM
     server.time_stretch_ratio = 1.0
+    
+    # Set stretch method from CLI
+    stretch_method = args.stretch_method
+    if stretch_method == "pyrubberband" and pyrb is None:
+        print("⚠️  pyrubberband not available, falling back to playback_rate")
+        stretch_method = "playback_rate"
+    elif stretch_method == "audiotsm" and not AUDIOTSM_AVAILABLE:
+        print("⚠️  audiotsm not available, falling back to playback_rate")
+        stretch_method = "playback_rate"
+    server.stretch_method = stretch_method
+    print(f"🎛️  BPM control method: {server.stretch_method}")
     server.print_clock = bool(args.watch)
     server.meter_beats = int(args.meter) if args.meter and args.meter > 0 else 4
     server_thread = server.start()
