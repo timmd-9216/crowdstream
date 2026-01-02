@@ -448,10 +448,12 @@ class PythonAudioServer:
         # Time-stretch buffer for more efficient processing
         # Accumulate multiple chunks before processing to reduce overhead
         # Larger buffer = better quality, more latency
-        # 16 chunks @ 1024 samples = 16384 samples = ~370ms buffer
-        self.stretch_buffer_size = chunk_size * 16  # Process 16 chunks at a time (~370ms)
+        # 32 chunks @ 1024 samples = 32768 samples = ~740ms buffer
+        self.stretch_buffer_size = chunk_size * 32  # Process 32 chunks at a time (~740ms)
+        self.stretch_min_process_size = chunk_size * 8  # Minimum size to process in emergency
         self.stretch_input_buffer = np.zeros((0, 2), dtype=np.float32)
         self.stretch_output_buffer = np.zeros((0, 2), dtype=np.float32)
+        self.stretch_output_target = chunk_size * 8  # Keep 8 chunks of output ready
         # Overrun tracking
         self.stretch_underrun_count = 0
         self.stretch_last_underrun_log = 0.0
@@ -610,13 +612,34 @@ class PythonAudioServer:
             # Add incoming audio to input buffer
             self.stretch_input_buffer = np.vstack((self.stretch_input_buffer, mix)) if self.stretch_input_buffer.shape[0] > 0 else mix
             
-            # Process when we have enough input AND need more output
-            while self.stretch_input_buffer.shape[0] >= self.stretch_buffer_size and self.stretch_output_buffer.shape[0] < self.chunk_size * 2:
-                # Take a larger chunk for processing
-                to_process = self.stretch_input_buffer[:self.stretch_buffer_size]
-                self.stretch_input_buffer = self.stretch_input_buffer[self.stretch_buffer_size:]
+            # Determine how much to process based on output buffer level
+            # If output is low, process even with less input (emergency mode)
+            output_level = self.stretch_output_buffer.shape[0]
+            input_level = self.stretch_input_buffer.shape[0]
+            
+            # Process loop - keep output buffer filled
+            while output_level < self.stretch_output_target:
+                # Determine process size based on urgency
+                if output_level < self.chunk_size * 2:
+                    # Emergency: process whatever we have (minimum 4 chunks)
+                    min_process = self.chunk_size * 4
+                elif output_level < self.chunk_size * 4:
+                    # Urgent: process with less input
+                    min_process = self.stretch_min_process_size
+                else:
+                    # Normal: wait for full buffer
+                    min_process = self.stretch_buffer_size
                 
-                # Apply time-stretch to larger buffer (more efficient)
+                # Check if we have enough input
+                if input_level < min_process:
+                    break  # Not enough input yet
+                
+                # Take what we need (up to full buffer size)
+                take_size = min(input_level, self.stretch_buffer_size)
+                to_process = self.stretch_input_buffer[:take_size]
+                self.stretch_input_buffer = self.stretch_input_buffer[take_size:]
+                
+                # Apply time-stretch
                 stretched = pyrb.time_stretch(to_process, self.sample_rate, ratio)
                 
                 # Add to output buffer
@@ -624,6 +647,10 @@ class PythonAudioServer:
                     self.stretch_output_buffer = np.vstack((self.stretch_output_buffer, stretched))
                 else:
                     self.stretch_output_buffer = stretched
+                
+                # Update levels for next iteration
+                output_level = self.stretch_output_buffer.shape[0]
+                input_level = self.stretch_input_buffer.shape[0]
             
             # Return a chunk from output buffer if available
             if self.stretch_output_buffer.shape[0] >= self.chunk_size:
