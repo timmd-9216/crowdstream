@@ -501,20 +501,20 @@ class PythonAudioServer:
         self.current_bpm = 120.0  # Current BPM (for smooth transitions)
         self.time_stretch_ratio = 1.0
         
-        # Time-stretch engine selection: audiotsm (fast) or pyrubberband (quality)
-        # audiotsm uses WSOLA algorithm - ~5-10x faster, good for real-time
+        # Time-stretch engine selection: pyrubberband (quality, default) or audiotsm (fast)
         # pyrubberband uses rubber-band library - higher quality, more CPU
-        self.use_audiotsm = AUDIOTSM_AVAILABLE  # Prefer audiotsm for performance
-        if AUDIOTSM_AVAILABLE:
+        # audiotsm uses WSOLA algorithm - faster but may have issues
+        self.use_audiotsm = False  # Default to pyrubberband for reliability
+        if pyrb is not None:
             self.enable_time_stretch = enable_time_stretch
+            print("🎵 Time-stretch: using pyrubberband - high quality")
+        elif AUDIOTSM_AVAILABLE:
+            self.enable_time_stretch = enable_time_stretch
+            self.use_audiotsm = True
             print("🚀 Time-stretch: using audiotsm (WSOLA) - fast, low CPU")
-        elif pyrb is not None:
-            self.enable_time_stretch = enable_time_stretch
-            self.use_audiotsm = False
-            print("🎵 Time-stretch: using pyrubberband - high quality, more CPU")
         else:
             self.enable_time_stretch = False
-            print("⚠️  Time-stretch: disabled (no audiotsm or pyrubberband available)")
+            print("⚠️  Time-stretch: disabled (no pyrubberband or audiotsm available)")
         
         # Movement-based BPM control (continuous adjustment system)
         self.movement_bpm_enabled = True
@@ -669,9 +669,11 @@ class PythonAudioServer:
                 
                 # Check if we have enough input
                 if input_level < min_process:
-                    # Only emergency if output is very low
-                    if output_level < self.chunk_size * 4 and input_level >= self.chunk_size * 4:
-                        min_process = self.chunk_size * 4  # Process 4 chunks minimum
+                    # Emergency: if output is critically low, process whatever we have
+                    if output_level < self.chunk_size * 2 and input_level >= self.chunk_size:
+                        min_process = self.chunk_size  # Process even 1 chunk to avoid silence
+                    elif output_level < self.chunk_size * 4 and input_level >= self.chunk_size * 2:
+                        min_process = self.chunk_size * 2  # Process 2 chunks minimum
                     else:
                         break  # Wait for more input
                 
@@ -682,9 +684,11 @@ class PythonAudioServer:
                 
                 # Apply time-stretch using selected engine
                 if self.use_audiotsm:
-                    # audiotsm uses speed factor (inverse of ratio)
-                    # ratio < 1 = slow down audio = speed < 1
-                    speed = ratio  # audiotsm speed: 0.5 = half speed, 2.0 = double speed
+                    # audiotsm speed: 0.5 = half speed (slower), 2.0 = double speed (faster)
+                    # ratio = base_bpm / current_bpm (e.g., 120/110 = 1.09)
+                    # For audiotsm we need: speed = current_bpm / base_bpm = 1/ratio
+                    # So if BPM drops from 120 to 110, speed = 0.917 (slower playback)
+                    speed = 1.0 / ratio
                     # audiotsm expects channels-first format: (channels, samples)
                     channels_first = to_process.T  # (samples, 2) -> (2, samples)
                     reader = ArrayReader(channels_first)
@@ -694,7 +698,7 @@ class PythonAudioServer:
                     # Convert back to (samples, channels) format
                     stretched = writer.data.T.astype(np.float32)
                 else:
-                    # pyrubberband fallback
+                    # pyrubberband: ratio > 1 = slower playback
                     stretched = pyrb.time_stretch(to_process, self.sample_rate, ratio)
                 
                 # Add to output buffer
