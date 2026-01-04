@@ -74,8 +74,8 @@ fi
 cd "$AUDIO_MIXER_DIR"
 
 # Run audio_server.py from current directory (audio-mixer/)
-# Filters are disabled by default (use --enable-filters to enable)
-python audio_server.py --port 57122 &
+# EQ filters deshabilitados por defecto para menor CPU (activa con --enable-filters)
+python audio_server.py --port 57122 --disable-filters &
 sleep_if_rpi 8  # Wait for audio server to fully initialize (ALSA probing takes time on RPi)
 sleep 2
 

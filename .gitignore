@@ -1,5 +1,11 @@
+# Ignore environment variables
 .env
+
+# Ignore CSV files
+.csv
 *.json
+
+# Ignore audio files
 *.mp3
 *.wav
 *.m4a
