@@ -1,0 +1,53 @@
+{
+  "movement_bpm": {
+    "description": "BPM adjustment based on movement detection. Lower movement = lower BPM, higher movement = higher BPM.",
+    "movement_max_value": 0.6,
+    "description_movement_max": "Maximum expected normalized movement value (typical max from detector). Used for normalization.",
+    
+    "thresholds": {
+      "very_very_low": 0.02,
+      "description_very_very_low": "Movement < 2% triggers very very low BPM",
+      "very_low": 0.05,
+      "description_very_low": "Movement 2-5% triggers very low BPM",
+      "low": 0.10,
+      "description_low": "Movement 5-10% triggers low BPM",
+      "medium": 0.10,
+      "description_medium": "Movement 10% triggers medium BPM. Movement >= this value starts progressive BPM increase up to high_max"
+    },
+    
+    "bpm_targets": {
+      "very_very_low": 105.0,
+      "description_very_very_low": "Target BPM when movement < 2%",
+      "very_low": 110.0,
+      "description_very_low": "Target BPM when movement 2-5%",
+      "low": 115.0,
+      "description_low": "Target BPM when movement 5-10%",
+      "medium": 118.0,
+      "description_medium": "Target BPM when movement 10%. Also the starting point for progressive increase",
+      "high_max": 130.0,
+      "description_high_max": "Maximum BPM when movement is high (>= medium threshold). Progressive mapping from medium to high_max based on movement level"
+    },
+    
+    "smoothing": {
+      "transition_time_seconds": 30.0,
+      "description_transition_time": "Target time in seconds for BPM transitions to complete (~99% of target)",
+      "audio_loop_rate_hz": 100.0,
+      "description_audio_loop_rate": "Approximate audio loop update rate (used for smoothing factor calculation)",
+      "smoothing_factor_stable": null,
+      "description_stable": "Stable smoothing factor (calculated automatically from transition_time and loop_rate). Higher = slower transition",
+      "smoothing_factor_up": 0.96,
+      "description_up": "Smoothing factor when BPM is decreasing (movement low). Higher = slower decrease",
+      "smoothing_factor_down": 0.92,
+      "description_down": "Smoothing factor when BPM is increasing (movement high). Lower = faster increase"
+    },
+    
+    "notes": [
+      "Movement thresholds define ranges: <very_very_low, very_very_low-very_low, very_low-low, low-medium, >=medium",
+      "When movement >= medium threshold, BPM maps progressively from bpm_targets.medium to bpm_targets.high_max",
+      "The mapping uses: movement_range = (max_expected_movement - medium_threshold), then maps linearly",
+      "Smoothing factors control transition speed: lower factor = faster transition, higher factor = slower transition",
+      "smoothing_factor_stable is calculated as: exp(-1 / (transition_time_seconds * audio_loop_rate_hz))"
+    ]
+  }
+}
+

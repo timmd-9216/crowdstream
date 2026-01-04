@@ -14,6 +14,7 @@ pure Python environment.
 from __future__ import annotations
 
 import argparse
+import json
 import platform
 import threading
 import time
@@ -424,6 +425,35 @@ class StemPlayer:
 class PythonAudioServer:
     """Main audio server class managing audio playback and OSC interface."""
 
+    @staticmethod
+    def _load_bpm_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
+        """Load BPM configuration from JSON file.
+        
+        Args:
+            config_path: Path to config file. If None, tries bpm_config.json in audio-mixer directory.
+        
+        Returns:
+            Dictionary with configuration values, or empty dict if file not found.
+        """
+        if config_path is None:
+            # Default: look for bpm_config.json in the same directory as this script
+            script_dir = Path(__file__).parent.absolute()
+            config_path = script_dir / "bpm_config.json"
+        
+        config_path = Path(config_path)
+        
+        if not config_path.exists():
+            return {}
+        
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                return config.get('movement_bpm', {})
+        except (json.JSONDecodeError, IOError, Exception) as e:
+            print(f"⚠️  Failed to load BPM config from {config_path}: {e}")
+            print("   Using default values")
+            return {}
+
     def _print_all_messages(self, address: str, *args: object) -> None:
         """Print every OSC message received (for debugging)."""
         try:
@@ -438,7 +468,7 @@ class PythonAudioServer:
 
     def __init__(self, osc_port: int = 57120, audio_device: Optional[int] = None, chunk_size: int = 1024,
                  enable_filters: bool = False, use_optimized_filters: bool = False, enable_time_stretch: bool = True,
-                 eq_smoothing_time_ms: float = 50.0):
+                 eq_smoothing_time_ms: float = 50.0, bpm_config_path: Optional[Path] = None):
         """Initialize audio server.
         
         Args:
@@ -449,7 +479,10 @@ class PythonAudioServer:
             use_optimized_filters: Use scipy-optimized filters (faster)
             enable_time_stretch: Enable real-time time stretching
             eq_smoothing_time_ms: Time in ms for EQ gain changes to smooth (default: 50ms)
+            bpm_config_path: Path to BPM configuration JSON file (default: bpm_config.json in audio-mixer directory)
         """
+        # Load BPM configuration from JSON
+        bpm_config = self._load_bpm_config(bpm_config_path)
         self.osc_port = osc_port
         self.sample_rate = 44100
         self.chunk_size = chunk_size  # Default 1024 for Raspberry Pi stability
@@ -528,37 +561,49 @@ class PythonAudioServer:
         self.movement_smoothing_factor = None  # Will be set after transition_time calculation
         self.current_movement = 0.0  # Current normalized movement value (0.0-1.0)
         self.previous_movement = 0.0  # Previous movement value to calculate delta
+        # Load BPM configuration from JSON or use defaults
         # Movement values are normalized (0.0-0.6+ typical range from detector)
-        # Using 0.6 as max for normalization to match detector's typical range
-        self.movement_max_value = 0.6  # Maximum expected normalized movement value (typical max from detector)
-        # BPM targets based on movement thresholds (gradual decrease for low movement)
-        # Low movement: BPM decreases in steps: 118 -> 115 -> 110 -> 105
-        self.threshold_very_very_low = 0.02  # < 2% -> 105 BPM
-        self.threshold_very_low = 0.05       # < 5% -> 110 BPM
-        self.threshold_low = 0.10            # < 10% -> 115 BPM
-        self.threshold_medium = 0.15         # < 15% -> 118 BPM
-        # BPM targets
-        self.bpm_very_very_low = 105.0  # Movement < 2%
-        self.bpm_very_low = 110.0       # Movement 2-5%
-        self.bpm_low = 115.0            # Movement 5-10%
-        self.bpm_medium = 118.0         # Movement 10-15%
-        self.bpm_high_max = 130.0       # Maximum BPM for high movement
-        # Smoothing for 30-second transitions
-        # Audio loop runs at ~100Hz (every ~10ms for 512 samples at 44100Hz)
-        # For 30s transition: need ~3000 iterations to reach 99% of target
+        self.movement_max_value = bpm_config.get('movement_max_value', 0.6)
+        
+        # Movement thresholds (from config or defaults)
+        thresholds = bpm_config.get('thresholds', {})
+        self.threshold_very_very_low = thresholds.get('very_very_low', 0.02)  # < 2% -> 105 BPM
+        self.threshold_very_low = thresholds.get('very_low', 0.05)           # < 5% -> 110 BPM
+        self.threshold_low = thresholds.get('low', 0.10)                     # < 10% -> 115 BPM
+        self.threshold_medium = thresholds.get('medium', 0.10)                # < 10% -> 118 BPM
+        
+        # BPM targets (from config or defaults)
+        bpm_targets = bpm_config.get('bpm_targets', {})
+        self.bpm_very_very_low = bpm_targets.get('very_very_low', 105.0)  # Movement < 2%
+        self.bpm_very_low = bpm_targets.get('very_low', 110.0)            # Movement 2-5%
+        self.bpm_low = bpm_targets.get('low', 115.0)                       # Movement 5-10%
+        self.bpm_medium = bpm_targets.get('medium', 118.0)                 # Movement 10%
+        self.bpm_high_max = bpm_targets.get('high_max', 130.0)            # Maximum BPM for high movement
+        
+        # Smoothing configuration (from config or defaults)
+        smoothing_config = bpm_config.get('smoothing', {})
+        self.transition_time_seconds = smoothing_config.get('transition_time_seconds', 30.0)
+        audio_loop_rate_hz = smoothing_config.get('audio_loop_rate_hz', 100.0)
+        
+        # Calculate smoothing factor for transitions
         # Formula: smoothing_factor = exp(-1 / (transition_time * update_rate))
-        # For 30s at 100Hz: smoothing_factor = exp(-1 / (30 * 100)) ≈ 0.99967
-        self.transition_time_seconds = 30.0  # Target transition time in seconds
-        audio_loop_rate_hz = 100.0  # Approximate audio loop update rate
-        # Calculate smoothing factor for ~30 second transitions
         # Higher smoothing_factor = slower transition
         self.smoothing_factor_stable = np.exp(-1.0 / (self.transition_time_seconds * audio_loop_rate_hz))
+        
         # Set initial smoothing factors to the calculated stable value
         self.movement_smoothing_factor_base = self.smoothing_factor_stable
         self.movement_smoothing_factor = self.smoothing_factor_stable
-        # Dynamic smoothing factors (not used in continuous mode, but kept for compatibility)
-        self.smoothing_factor_up = 0.96  # When movement increases (BPM should decrease faster)
-        self.smoothing_factor_down = 0.92  # When movement decreases (BPM should increase faster)
+        
+        # Dynamic smoothing factors for asymmetric BPM transitions
+        # Lower smoothing factor = faster transition (more aggressive)
+        # Higher smoothing factor = slower transition (more gradual)
+        self.smoothing_factor_up = smoothing_config.get('smoothing_factor_up', 0.96)    # When BPM is decreasing - slower decrease
+        self.smoothing_factor_down = smoothing_config.get('smoothing_factor_down', 0.92)  # When BPM is increasing - faster increase
+        
+        # Log if config was loaded
+        if bpm_config:
+            config_file = bpm_config_path or Path(__file__).parent / "bpm_config.json"
+            print(f"📋 BPM configuration loaded from {config_file}")
         self._time_stretch_warned = False
         if enable_time_stretch and pyrb is None:
             print("⚠️  pyrubberband not available; time-stretch disabled.")
@@ -1515,8 +1560,8 @@ class PythonAudioServer:
             self.current_movement = normalized_movement
             
             # Continuous BPM adjustment system
-            # Low movement: BPM decreases in steps: 118 -> 115 -> 113 -> 110
-            # High movement (>= 15%): increase BPM progressively up to 130
+            # Low movement: BPM decreases in steps: 118 -> 115 -> 110 -> 105 (gradual, slower)
+            # High movement (>= 10%): increase BPM progressively up to 130 (faster response)
             if normalized_movement < self.threshold_very_very_low:
                 # Very very low movement (< 2%) -> target 110 BPM
                 target_bpm = self.bpm_very_very_low
@@ -1527,11 +1572,11 @@ class PythonAudioServer:
                 # Low movement (5-10%) -> target 115 BPM
                 target_bpm = self.bpm_low
             elif normalized_movement < self.threshold_medium:
-                # Medium-low movement (10-15%) -> target 118 BPM
+                # Medium-low movement (10%) -> target 118 BPM
                 target_bpm = self.bpm_medium
             else:
-                # High movement (>= 15%) -> increase BPM progressively up to 130
-                # Map movement from 15% to 60% to BPM range 118-130
+                # High movement (>= 10%) -> increase BPM progressively up to 130
+                # Map movement from 10% to 60% to BPM range 118-130
                 movement_above_threshold = normalized_movement - self.threshold_medium
                 max_expected_movement = 0.6  # 60% as typical maximum
                 movement_range = max_expected_movement - self.threshold_medium
@@ -1543,10 +1588,19 @@ class PythonAudioServer:
                 bpm_range = self.bpm_high_max - self.bpm_medium
                 target_bpm = self.bpm_medium + (high_movement_factor * bpm_range)
             
-            # Adjust smoothing factor for smooth ~30 second transitions
-            # Use stable smoothing factor (0.98) to achieve gradual transitions
-            # This allows the BPM to smoothly reach the target over approximately 30 seconds
-            self.movement_smoothing_factor = self.smoothing_factor_stable
+            # Adjust smoothing factor based on direction of change
+            # Use dynamic smoothing factors to make BPM increases faster than decreases
+            if target_bpm > self.current_bpm:
+                # BPM is increasing: use more aggressive factor (0.92) for faster response
+                # This makes the BPM rise more quickly when movement increases
+                self.movement_smoothing_factor = self.smoothing_factor_down  # 0.92 = faster
+            elif target_bpm < self.current_bpm:
+                # BPM is decreasing: use stable factor (0.99967) for gradual decrease
+                # This makes the BPM drop more slowly when movement decreases
+                self.movement_smoothing_factor = self.smoothing_factor_stable  # 0.99967 = slower
+            else:
+                # No change: keep current smoothing factor
+                self.movement_smoothing_factor = self.smoothing_factor_stable
             
             self.target_bpm = target_bpm
             
@@ -1726,6 +1780,7 @@ def main() -> None:
     parser.add_argument("--c_preload", type=str, help="Preload Deck C file into buffer 2100 without starting")
     parser.add_argument("--d", type=str, help="Path to audio file for Deck D (buffer 3100)")
     parser.add_argument("--levels", type=float, nargs=4, metavar=("A","B","C","D"), help="Initial per-deck levels (e.g., --levels 1 1 1 1)")
+    parser.add_argument("--bpm-config", type=Path, help="Path to BPM configuration JSON file (default: bpm_config.json in audio-mixer directory)")
 
     args = parser.parse_args()
     if args.cli_sentinel:
@@ -1750,6 +1805,7 @@ def main() -> None:
         enable_filters=enable_filters,
         use_optimized_filters=args.optimized_filters,
         enable_time_stretch=not args.disable_time_stretch,
+        bpm_config_path=args.bpm_config,
     )
     server.clock.bpm = args.bpm
     server.base_bpm = args.bpm

@@ -40,15 +40,15 @@ The audio server supports **automatic BPM adjustment based on detected movement*
 
 #### How It Works
 
-The system uses **threshold-based BPM targets** with smooth transitions (~30 seconds):
+The system uses **threshold-based BPM targets** with smooth transitions (~30 seconds). All values are configurable via `bpm_config.json`:
 
-| Movement Level | Threshold | Target BPM |
-|----------------|-----------|------------|
-| Very very low  | < 2%      | 105 BPM    |
-| Very low       | 2-5%      | 110 BPM    |
-| Low            | 5-10%     | 115 BPM    |
-| Medium-low     | 10-15%    | 118 BPM    |
-| High           | ≥ 15%     | 118→130 BPM (progressive) |
+| Movement Level | Threshold | Target BPM | Configurable |
+|----------------|-----------|------------|--------------|
+| Very very low  | < 2%      | 105 BPM    | ✅ `thresholds.very_very_low`, `bpm_targets.very_very_low` |
+| Very low       | 2-5%      | 110 BPM    | ✅ `thresholds.very_low`, `bpm_targets.very_low` |
+| Low            | 5-10%     | 115 BPM    | ✅ `thresholds.low`, `bpm_targets.low` |
+| Medium-low     | 10%       | 118 BPM    | ✅ `thresholds.medium`, `bpm_targets.medium` |
+| High           | ≥ 10%     | 118→130 BPM (progressive) | ✅ `thresholds.medium`, `bpm_targets.high_max` |
 
 #### Behavior
 
@@ -58,6 +58,22 @@ The system uses **threshold-based BPM targets** with smooth transitions (~30 sec
 - **Base BPM** starts at 120 BPM
 
 #### Configuration
+
+All BPM thresholds, targets, and smoothing factors can be configured via a JSON file. See [BPM_CONFIGURATION.md](docs/BPM_CONFIGURATION.md) for detailed documentation.
+
+**Quick Start:**
+```bash
+# Use default configuration (bpm_config.json in audio-mixer/)
+python audio_server.py
+
+# Use custom configuration file
+python audio_server.py --bpm-config /path/to/custom_config.json
+```
+
+The default configuration file (`bpm_config.json`) contains:
+- Movement thresholds (very_very_low, very_low, low, medium)
+- BPM targets for each threshold
+- Smoothing factors for transitions
 
 Both `audio_server.py` and `mixer_tracks.py` share this logic. The movement data is received via OSC on port 57122 from the dance movement detector.
 

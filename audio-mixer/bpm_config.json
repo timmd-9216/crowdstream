@@ -1,0 +1,25 @@
+{
+  "movement_bpm": {
+    "movement_max_value": 0.6,
+    "thresholds": {
+      "very_very_low": 0.02,
+      "very_low": 0.05,
+      "low": 0.10,
+      "medium": 0.10
+    },
+    "bpm_targets": {
+      "very_very_low": 105.0,
+      "very_low": 110.0,
+      "low": 115.0,
+      "medium": 118.0,
+      "high_max": 130.0
+    },
+    "smoothing": {
+      "transition_time_seconds": 30.0,
+      "audio_loop_rate_hz": 100.0,
+      "smoothing_factor_up": 0.96,
+      "smoothing_factor_down": 0.92
+    }
+  }
+}
+
