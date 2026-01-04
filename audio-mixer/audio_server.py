@@ -35,6 +35,7 @@ try:
     import pyrubberband as pyrb
 except Exception:  # pragma: no cover - optional dependency
     pyrb = None
+
 import pyaudio
 import soundfile as sf
 from pythonosc import dispatcher
@@ -637,7 +638,13 @@ class PythonAudioServer:
         - Falls back to smaller batches when output runs low (prevents underruns)
         - Maintains reserve output buffer for smooth playback
         """
-        if not self.enable_time_stretch or pyrb is None:
+        # Check if time-stretch is enabled and a valid method is available
+        if not self.enable_time_stretch:
+            return mix
+        # Check if the selected method has its library available
+        if self.stretch_method == "pyrubberband" and pyrb is None:
+            return mix
+        if self.stretch_method == "audiotsm" and not AUDIOTSM_AVAILABLE:
             return mix
         if abs(ratio - 1.0) < 0.001:
             # No stretch needed, but still need to handle any buffered output
@@ -686,7 +693,7 @@ class PythonAudioServer:
                 self.stretch_input_buffer = self.stretch_input_buffer[take_size:]
                 
                 # Apply time-stretch using selected engine
-                if self.use_audiotsm:
+                if self.stretch_method == "audiotsm":
                     # audiotsm speed: 0.5 = half speed (slower), 2.0 = double speed (faster)
                     # ratio = base_bpm / current_bpm (e.g., 120/110 = 1.09)
                     # For audiotsm we need: speed = current_bpm / base_bpm = 1/ratio
@@ -1702,7 +1709,8 @@ def main() -> None:
     parser.add_argument("--stretch-method", type=str, default="playback_rate",
                        choices=["playback_rate", "pyrubberband", "audiotsm"],
                        help="BPM control method: playback_rate (fast, pitch changes), "
-                            "pyrubberband (quality, preserves pitch), audiotsm (fast WSOLA)")
+                            "pyrubberband (quality, preserves pitch), "
+                            "audiotsm (fast WSOLA)")
     parser.add_argument("--a", type=str, help="Path to audio file for Deck A (buffer 100)")
     parser.add_argument("--b", type=str, help="Path to audio file for Deck B (buffer 1100)")
     parser.add_argument("--rate", type=float, default=1.0, help="Playback rate for autoplay")

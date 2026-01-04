@@ -56,7 +56,7 @@ This script creates virtual environments for:
 - `dance_movement_detector/venv` - Movement detector
 - `audio-mixer/venv` - Audio mixer
 
-Each service can also be installed individually by running `./install.sh` inside its directory.
+Each service can also be installed individually by running `./install.sh` inside its directory (for `audio-mixer` use `./scripts/audio-mixer-install.sh`).
 
 ### Stopping All Services
 

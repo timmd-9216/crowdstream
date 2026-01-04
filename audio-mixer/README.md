@@ -103,7 +103,33 @@ python audio_server.py --port 57122 --stretch-method pyrubberband
 
 # Fast time-stretch (WSOLA)
 python audio_server.py --port 57122 --stretch-method audiotsm
+
 ```
+
+⚠️ Consideraciones de tiempo real:
+- `pyrubberband` no es RT puro en Python; procesa en lotes grandes, añade ~2s de latencia y puede causar underruns con buffers pequeños. Úsalo solo si puedes tolerar la latencia.
+- Para uso en vivo con baja latencia, prefiere `playback_rate` (cambia pitch) o `audiotsm` (mantiene pitch, menor calidad pero más ligero).
+
+#### Verificar Bibliotecas Disponibles
+
+Para verificar qué métodos de time-stretching están disponibles en tu sistema:
+
+```bash
+# Desde el directorio raíz del proyecto
+python3 audio-mixer/check_time_stretch_libs.py
+
+# O desde audio-mixer/ (con venv activado)
+cd audio-mixer
+source venv/bin/activate
+python check_time_stretch_libs.py
+```
+
+Este script verifica:
+- ✅ `playback_rate` (siempre disponible)
+- ✅ `pyrubberband` (requiere librería C + Python)
+- ✅ `audiotsm` (solo Python)
+
+El script muestra qué está disponible y proporciona instrucciones de instalación para lo que falta.
 
 #### Installing Optional Dependencies
 
@@ -117,6 +143,7 @@ sudo apt-get install rubberband-cli
 
 # For audiotsm (already in requirements.txt):
 pip install audiotsm
+
 ```
 
 #### Time-Stretch Buffer Strategy

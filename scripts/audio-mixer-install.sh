@@ -54,3 +54,82 @@ echo ""
 echo "Virtual environment ready at: venv/"
 echo "To activate: source venv/bin/activate"
 echo ""
+
+# Print system-specific recommendations
+print_recommendations() {
+    echo "════════════════════════════════════════════════════════════"
+    echo "📋 RECOMENDACIONES DE INSTALACIÓN"
+    echo "════════════════════════════════════════════════════════════"
+    echo ""
+    
+    OS="$(uname -s)"
+    case "${OS}" in
+        Linux*)
+            echo "🐧 Sistema: Linux"
+            echo ""
+            echo "Para habilitar todas las funciones de time-stretching, instala:"
+            echo ""
+            echo "  # Para pyrubberband (alta calidad):"
+            echo "  sudo apt-get update"
+            echo "  sudo apt-get install -y librubberband-dev"
+            echo ""
+            echo ""
+            echo "  # Para PyAudio (si no está instalado):"
+            echo "  sudo apt-get install -y python3-pyaudio portaudio19-dev"
+            echo ""
+            echo "  # Luego reinstala las dependencias Python:"
+            echo "  source venv/bin/activate"
+            echo "  pip install --upgrade pyrubberband"
+            ;;
+        Darwin*)
+            echo "🍎 Sistema: macOS"
+            echo ""
+            echo "Para habilitar todas las funciones de time-stretching, instala:"
+            echo ""
+            
+            # Check if Homebrew is installed
+            if command -v brew >/dev/null 2>&1; then
+                echo "  # Para pyrubberband (alta calidad):"
+                echo "  brew install rubberband"
+                echo ""
+                echo ""
+                echo "  # Para PyAudio (si hay problemas):"
+                echo "  brew install portaudio"
+                echo ""
+                echo "  # Luego reinstala las dependencias Python:"
+                echo "  source venv/bin/activate"
+                echo "  pip install --upgrade pyrubberband"
+            else
+                echo "  ⚠️  Homebrew no está instalado"
+                echo "  Instala Homebrew primero: https://brew.sh"
+                echo ""
+                echo "  Luego ejecuta:"
+                echo "  brew install rubberband sound-touch"
+            fi
+            ;;
+        *)
+            echo "💻 Sistema: ${OS}"
+            echo ""
+            echo "Consulta la documentación para instalar:"
+            echo "  - Rubber Band library (para pyrubberband)"
+            ;;
+    esac
+    
+    echo ""
+    echo "════════════════════════════════════════════════════════════"
+    echo "🔍 VERIFICAR BIBLIOTECAS DISPONIBLES"
+    echo "════════════════════════════════════════════════════════════"
+    echo ""
+    echo "Para verificar qué métodos de time-stretching están disponibles:"
+    echo ""
+    echo "  source venv/bin/activate"
+    echo "  python check_time_stretch_libs.py"
+    echo ""
+    echo "O desde el directorio raíz:"
+    echo "  python audio-mixer/check_time_stretch_libs.py"
+    echo ""
+    echo "════════════════════════════════════════════════════════════"
+    echo ""
+}
+
+print_recommendations
