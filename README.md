@@ -58,6 +58,8 @@ This script creates virtual environments for:
 
 Each service can also be installed individually by running `./install.sh` inside its directory (for `audio-mixer` use `./scripts/audio-mixer-install.sh`).
 
+⏳ Nota: la primera ejecución puede tardar más porque se descargan los modelos YOLO `.pt` necesarios para detección/visualización. Las siguientes ejecuciones reutilizan el modelo cacheado.
+
 ### Stopping All Services
 
 ```bash
