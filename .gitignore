@@ -2,8 +2,9 @@
 .env
 
 # Ignore CSV files
-.csv
+*.csv
 *.json
+*.xml
 
 # Ignore audio files
 *.mp3
