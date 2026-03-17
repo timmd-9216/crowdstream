@@ -132,6 +132,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$ROOT_DIR/logs"
 
+# Ensure logs directory exists
+mkdir -p "$LOG_DIR"
+
 # Kill any existing services first
 echo "Stopping any existing services..."
 cd "$ROOT_DIR"
@@ -232,11 +235,23 @@ sleep_if_rpi 2
 if [ "$IS_STANDALONE" = false ]; then
     echo "Starting Movement Detector..."
     cd "$ROOT_DIR/dance_movement_detector"
-    DETECTOR_CFG="${DETECTOR_CFG:-config/raspberry_pi_optimized.json}"
+    # Raspberry Pi: use optimized RPi config; otherwise multi_destination
+    if [ -z "${DETECTOR_CFG:-}" ]; then
+        if is_raspberry_pi; then
+            DETECTOR_CFG="config/raspberry_pi_optimized.json"
+        else
+            DETECTOR_CFG="config/multi_destination.json"
+        fi
+    fi
+    # Only set DISPLAY on Linux (RPi/headless); on macOS leave unset so cv2.imshow can open window
+    if [ "$(uname -s)" = "Linux" ]; then
+        export DISPLAY=:0
+    fi
+    # PYTHONUNBUFFERED=1 so logs appear immediately in detector.log (no block buffering)
     if [ -d "venv" ]; then
-        DISPLAY=:0 venv/bin/python3 src/dance_movement_detector.py --config "$DETECTOR_CFG" > "$LOG_DIR/detector.log" 2>&1 &
+        PYTHONUNBUFFERED=1 venv/bin/python3 src/dance_movement_detector.py --config "$DETECTOR_CFG" > "$LOG_DIR/detector.log" 2>&1 &
     else
-        DISPLAY=:0 python3 src/dance_movement_detector.py --config "$DETECTOR_CFG" > "$LOG_DIR/detector.log" 2>&1 &
+        PYTHONUNBUFFERED=1 python3 src/dance_movement_detector.py --config "$DETECTOR_CFG" > "$LOG_DIR/detector.log" 2>&1 &
     fi
     DETECTOR_PID=$!
     echo "  Detector started (PID: $DETECTOR_PID)"

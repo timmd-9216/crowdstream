@@ -260,27 +260,35 @@ class DanceMovementDetector:
 
     def start(self):
         """Start detection and analysis"""
-        self.cap = cv2.VideoCapture(self.video_source)
+        # On macOS (incl. M1), use AVFoundation for integrated camera; avoid setting props before first read
+        is_macos_camera = (
+            platform.system() == "Darwin"
+            and isinstance(self.video_source, int)
+        )
+        if is_macos_camera and hasattr(cv2, "CAP_AVFOUNDATION"):
+            self.cap = cv2.VideoCapture(self.video_source, cv2.CAP_AVFOUNDATION)
+        else:
+            self.cap = cv2.VideoCapture(self.video_source)
 
         if not self.cap.isOpened():
             raise RuntimeError(f"Cannot open video source: {self.video_source}")
 
-        # Reduce camera buffer to minimize latency
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        # Reduce camera buffer to minimize latency (skip on macOS AVFoundation - can cause read() to fail)
+        if not is_macos_camera:
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-        # Set camera resolution (lower = faster)
+        # Set camera resolution (lower = faster). On macOS AVFoundation, set after first read to avoid issues
         camera_width = self.config.get('camera_width', 640)
         camera_height = self.config.get('camera_height', 480)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
-
-        # Set FPS if specified
         camera_fps = self.config.get('camera_fps', None)
-        if camera_fps:
-            self.cap.set(cv2.CAP_PROP_FPS, camera_fps)
+        if not is_macos_camera:
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+            if camera_fps:
+                self.cap.set(cv2.CAP_PROP_FPS, camera_fps)
 
         print(f"Starting dance movement detection...")
-        print(f"Video source: {self.video_source}")
+        print(f"Video source: {self.video_source}" + (" (macOS built-in, AVFoundation)" if is_macos_camera else ""))
         device_info = self.device if self.device else "auto-detect"
         print(f"Device: {device_info} | FP16: {self.use_half}")
         print(f"Message interval: {self.message_interval}s")
@@ -304,7 +312,13 @@ class DanceMovementDetector:
         while True:
             ret, frame = self.cap.read()
             if not ret:
-                print("End of video or cannot read frame")
+                if isinstance(self.video_source, int):
+                    print("Cannot read from camera. Common causes:")
+                    print("  • macOS: Grant camera access to Terminal (or your IDE) in System Settings → Privacy & Security → Camera")
+                    print("  • Another app may be using the camera (Zoom, FaceTime, Chrome, etc.) — close it and try again")
+                    print("  • Try a different camera index: --video 1 or edit video_source in config")
+                else:
+                    print("End of video or cannot read frame")
                 break
 
             frame_count += 1

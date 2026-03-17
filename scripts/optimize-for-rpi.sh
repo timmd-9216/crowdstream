@@ -48,13 +48,13 @@ fi
 echo ""
 echo "📝 Step 2/3: Configuring detector for TFLite..."
 
-# Update start-all-services.sh to use TFLite config by default on RPi
+# Update start-all-services.sh: RPi branch uses TFLite config
 if grep -q "raspberry_pi_optimized.json" "$SCRIPT_DIR/start-all-services.sh"; then
     sed -i.bak 's/raspberry_pi_optimized\.json/raspberry_pi_tflite.json/g' "$SCRIPT_DIR/start-all-services.sh"
-    echo "   ✅ Updated scripts/start-all-services.sh"
+    echo "   ✅ Updated scripts/start-all-services.sh (RPi detector config → TFLite)"
 else
     echo "   ⚠️  Could not auto-update scripts/start-all-services.sh"
-    echo "      Manual step: Edit and change config to raspberry_pi_tflite.json"
+    echo "      Manual step: set DETECTOR_CFG to config/raspberry_pi_tflite.json for the RPi branch"
 fi
 
 echo ""

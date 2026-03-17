@@ -2,27 +2,29 @@
 
 ## Quick Start
 
-Choose the configuration that best fits your needs:
+**Configs que existen en el repo:** `config.json`, `raspberry_pi_optimized.json`, `multi_destination.json`. Para que el **reconocimiento llegue al dashboard y al visualizador**, usá una config con `osc_destinations`. **Por defecto** `perfo-start.sh` usa: en **Raspberry Pi** `raspberry_pi_optimized.json`, en desktop/Mac `multi_destination.json`. `config.json` solo envía al puerto 5005 (dashboard), no al visualizador (5007).
 
-### 🚀 Maximum Performance (~20-25 FPS)
-Best for: Live performances with multiple dancers, when speed matters more than precision.
+Elegí la que mejor se adapte:
+
+### ⚖️ Múltiples destinos (por defecto) ⭐ RECOMENDADO
+Es la config por defecto de `perfo-start.sh`. Envía a dashboard (5005) y visualizadores (5007, etc.). Podés editar `osc_destinations` en el JSON.
 
 ```bash
-./start_detector_rpi.sh config/config_rpi_max_performance.json
+./start.sh --config config/multi_destination.json
 ```
 
-### ⚖️ Balanced (~12-18 FPS) ⭐ RECOMMENDED
-Best for: General use, good balance between speed and accuracy.
+### 🎯 Optimizada RPi (~12-18 FPS)
+Misma idea que multi_destination pero con parámetros afinados para Raspberry Pi.
 
 ```bash
-./start_detector_rpi.sh config/config_rpi_optimized.json
+./start.sh --config config/raspberry_pi_optimized.json
 ```
 
-### 🎯 High Quality (~5-8 FPS)
-Best for: Debugging, testing, when accuracy is critical.
+### 🎯 Alta calidad / solo testing (~5-8 FPS)
+Solo dashboard recibe (puerto 5005). **El visualizador no recibe datos** con esta config.
 
 ```bash
-./start_detector_rpi.sh config/config.json
+./start.sh --config config/config.json
 ```
 
 ---
@@ -34,11 +36,11 @@ All configuration files are in: `dance_movement_detector/config/`
 
 ### Available Configs
 
-| File | FPS | CPU | Use Case |
-|------|-----|-----|----------|
-| `config_rpi_max_performance.json` | 20-25 | 40-50% | Live shows, many dancers |
-| `config_rpi_optimized.json` | 12-18 | 50-70% | General use (recommended) |
-| `config.json` | 5-8 | 80-100% | Testing, debugging |
+| File | FPS | OSC destinos | Use Case |
+|------|-----|--------------|----------|
+| `multi_destination.json` | según params | configurable | **Por defecto (perfo)** — múltiples destinos |
+| `raspberry_pi_optimized.json` | 12-18 | 5005, 5007, 5009, 57120 | RPi / uso general |
+| `config.json` | 5-8 | **solo 5005** | Testing; visualizador no recibe |
 
 ---
 
@@ -291,7 +293,7 @@ All configuration files are in: `dance_movement_detector/config/`
 5. ✅ Use better model (`yolov8s-pose.pt`)
 
 ### If Temperature is Too High (>80°C)
-1. ✅ Use `config_rpi_max_performance.json`
+1. ✅ Use `raspberry_pi_optimized.json`
 2. ✅ Add active cooling (fan)
 3. ✅ Reduce `camera_fps`
 4. ✅ Increase `skip_frames`
@@ -310,7 +312,7 @@ python src/dance_movement_detector.py --config config/test_config.json --no-disp
 ### Monitor Performance
 ```bash
 # Terminal 1: Run detector
-./start_detector_rpi.sh config/config_rpi_max_performance.json
+./start_detector_rpi.sh config/raspberry_pi_optimized.json
 
 # Terminal 2: Monitor CPU
 htop
@@ -347,18 +349,18 @@ You can override config file settings from the command line:
 ```bash
 # Override video source
 python src/dance_movement_detector.py \
-  --config config/config_rpi_optimized.json \
+  --config config/raspberry_pi_optimized.json \
   --video /path/to/video.mp4
 
 # Override OSC settings
 python src/dance_movement_detector.py \
-  --config config/config_rpi_optimized.json \
+  --config config/raspberry_pi_optimized.json \
   --osc-host 192.168.1.100 \
   --osc-port 8000
 
 # Override message interval
 python src/dance_movement_detector.py \
-  --config config/config_rpi_optimized.json \
+  --config config/raspberry_pi_optimized.json \
   --interval 5.0
 
 # Force display off
@@ -378,13 +380,13 @@ ls -la config/
 
 # Use absolute path
 python src/dance_movement_detector.py \
-  --config /home/hordia/dev/crowdstream-audio/dance_movement_detector/config/config_rpi_optimized.json
+  --config /home/hordia/dev/crowdstream-audio/dance_movement_detector/config/raspberry_pi_optimized.json
 ```
 
 ### Settings not taking effect
 1. Check JSON syntax (use `jq` to validate):
    ```bash
-   jq . config/config_rpi_optimized.json
+   jq . config/raspberry_pi_optimized.json
    ```
 
 2. Restart the detector after changing config
@@ -394,8 +396,8 @@ python src/dance_movement_detector.py \
 ### Performance still poor
 1. Make sure you're using the right config:
    ```bash
-   # Should see "Using config: config/config_rpi_max_performance.json"
-   ./start_detector_rpi.sh config/config_rpi_max_performance.json
+   # Should see "Using config: config/raspberry_pi_optimized.json"
+   ./start_detector_rpi.sh config/raspberry_pi_optimized.json
    ```
 
 2. Check system resources:
@@ -431,10 +433,10 @@ python src/dance_movement_detector.py \
 
 ```bash
 # 1. Test setup with balanced config
-./start_detector_rpi.sh config/config_rpi_optimized.json
+./start_detector_rpi.sh config/raspberry_pi_optimized.json
 
 # 2. If smooth, great! If not, switch to max performance
-./start_detector_rpi.sh config/config_rpi_max_performance.json
+./start_detector_rpi.sh config/raspberry_pi_optimized.json
 
 # 3. Run for 5 minutes, monitor temperature
 watch -n 2 vcgencmd measure_temp
@@ -450,7 +452,7 @@ python src/dance_movement_detector.py \
   --config config/config.json
 
 # On Raspberry Pi: Use balanced mode without display
-./start_detector_rpi.sh config/config_rpi_optimized.json
+./start_detector_rpi.sh config/raspberry_pi_optimized.json
 ```
 
 ---

@@ -195,9 +195,10 @@ Only one service can listen on a port at a time. Therefore:
 - Check `logs/detector.log`
 - Try with `--show-video` to see detections
 
-### Dashboard/Visualizer not updating
+### Recognition not showing in visualizer / Dashboard or visualizer not updating
+- **perfo-start.sh** uses by default: on **Raspberry Pi** `config/raspberry_pi_optimized.json`, otherwise `config/multi_destination.json` (both send to ports 5005, 5007, etc.). If you run the detector with **config.json** instead, it only sends to port 5005 (dashboard); the cosmic_skeleton visualizer (port 5007) receives nothing. Use a config with `osc_destinations` so both dashboard and visualizer get data.
 - Verify WebSocket connection (green indicator in UI)
-- Check that detector is sending to correct ports
+- Check that detector is sending to correct ports: `lsof -i:5005` and `lsof -i:5007`
 - Check `logs/` for errors
 
 ### View running processes

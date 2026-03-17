@@ -84,25 +84,27 @@ El detector envía los siguientes mensajes OSC:
 
 ## Configuración
 
-### 📁 Configuraciones Pre-hechas
+### 📁 Configuraciones disponibles
 
-| Config | FPS (RPi4) | CPU | Uso Recomendado |
-|--------|-----------|-----|-----------------|
-| `config_rpi_max_performance.json` | 20-25 | 40-50% | Shows en vivo, máxima velocidad |
-| `config_rpi_optimized.json` ⭐ | 12-18 | 50-70% | Uso general (recomendado) |
-| `config.json` | 5-8 | 80-100% | Testing, debugging |
+| Config | FPS (RPi4) | OSC destinos | Uso |
+|--------|-----------|--------------|-----|
+| `multi_destination.json` | según params | 5005, 5007, etc. | **Por defecto (perfo)** en desktop/Mac — múltiples destinos (editable) |
+| `raspberry_pi_optimized.json` ⭐ RPi | 12-18 | 5005, 5007, 5009, 57120 | **Por defecto en Raspberry Pi** (dashboard + visualizadores) |
+| `config.json` | 5-8 | **solo 5005** | Testing; **no envía al visualizador** (puerto 5007) |
+
+**Importante:** Para que el reconocimiento se vea en el **dashboard y en el visualizador** (cosmic_skeleton), el detector debe usar una config con `osc_destinations` que incluya 5005 (dashboard) y 5007 (cosmic_skeleton). Por defecto `perfo-start.sh` usa: en **Raspberry Pi** `raspberry_pi_optimized.json`, en desktop/Mac `multi_destination.json`. `config.json` solo tiene `osc_port: 5005`, por eso el visualizador no recibe datos si usás esa config.
 
 ### Usar configuración optimizada
 
 ```bash
-# Raspberry Pi - Máximo rendimiento
-./start_detector_rpi.sh config/config_rpi_max_performance.json
+# Por defecto (perfo) — múltiples destinos (dashboard + visualizador)
+./start.sh --config config/multi_destination.json
 
-# Raspberry Pi - Balanceado (recomendado)
-./start_detector_rpi.sh config/config_rpi_optimized.json
+# Alternativa optimizada RPi
+./start.sh --config config/raspberry_pi_optimized.json
 
-# Alta calidad (más lento)
-./start_detector_rpi.sh config/config.json
+# Solo testing (solo dashboard recibe)
+./start.sh --config config/config.json
 ```
 
 ### Configuración manual
@@ -206,8 +208,8 @@ Puedes escalar estos valores según tu aplicación. Los valores anteriores (en p
 
 ### FPS bajo en Raspberry Pi
 ```bash
-# 1. Usar configuración de máximo rendimiento
-./start_detector_rpi.sh config/config_rpi_max_performance.json
+# 1. Usar configuración optimizada (envía a dashboard + visualizador)
+./start_detector_rpi.sh config/raspberry_pi_optimized.json
 
 # 2. Verificar temperatura (debe ser <80°C)
 vcgencmd measure_temp
@@ -229,19 +231,22 @@ vcgencmd get_camera  # Debe ser: supported=1 detected=1
 ### Configuración no toma efecto
 ```bash
 # Verificar sintaxis JSON
-jq . config/config_rpi_optimized.json
+jq . config/raspberry_pi_optimized.json
 
-# Usar ruta absoluta
-./start_detector_rpi.sh /home/hordia/dev/crowdstream-audio/dance_movement_detector/config/config_rpi_max_performance.json
+# Usar ruta absoluta si hace falta
+./start_detector_rpi.sh $(pwd)/config/raspberry_pi_optimized.json
 ```
 
-### Mensajes OSC no se reciben
-```bash
-# Verificar puerto correcto
-# El visualizador debe estar escuchando en el mismo puerto (default: 5005)
-
-# Probar con múltiples destinos en config/multi_destination.json
-```
+### Mensajes OSC no se reciben / el reconocimiento no aparece en el visualizador
+- **Causa frecuente:** Estás usando `config.json`, que solo envía al puerto 5005 (dashboard). El visualizador cosmic_skeleton escucha en **5007**.
+- **Solución:** Usar una config con `osc_destinations` que incluya 5005 y 5007:
+  ```bash
+  ./start.sh --config config/multi_destination.json
+  # o
+  ./start.sh --config config/raspberry_pi_optimized.json
+  ```
+- Si arrancás todo con `./scripts/perfo-start.sh`, en RPi usa `raspberry_pi_optimized.json` y en desktop `multi_destination.json`.
+- Verificar que dashboard y visualizador estén levantados antes que el detector y que los puertos 5005 y 5007 estén libres: `lsof -i:5005` y `lsof -i:5007`.
 
 ## Performance Esperada
 
@@ -250,8 +255,8 @@ jq . config/config_rpi_optimized.json
 | Configuración | FPS | CPU | Calidad |
 |--------------|-----|-----|---------|
 | Max Performance | 20-25 | 40-50% | ⭐⭐ |
-| Balanced | 12-18 | 50-70% | ⭐⭐⭐⭐ |
-| High Quality | 5-8 | 80-100% | ⭐⭐⭐⭐⭐ |
+| Balanced (raspberry_pi_optimized) | 12-18 | 50-70% | ⭐⭐⭐⭐ |
+| High Quality (config.json) | 5-8 | 80-100% | ⭐⭐⭐⭐⭐ |
 
 ### MacOS / Desktop
 

@@ -71,7 +71,7 @@ Este script inicia:
 - **Normalización por bounding box**: El movimiento se normaliza por el tamaño del bounding box, haciéndolo independiente de la distancia a la cámara
 - Envía datos vía OSC a múltiples destinos
 
-**Puerto OSC de salida**: Envía a 5005 y 5006
+**Puerto OSC de salida**: Envía a 5005 (dashboard) y 5007 (cosmic_skeleton)
 
 **Movimiento Normalizado:**
 - Los valores de movimiento son relativos al tamaño de la persona (normalizados)
@@ -148,7 +148,7 @@ Todos reciben mensajes OSC de movimiento y reaccionan en tiempo real.
 
 Solo un servicio puede escuchar en un puerto a la vez. Por eso:
 - Dashboard escucha en puerto OSC **5005**
-- Visualizer escucha en puerto OSC **5006**
+- Visualizer (cosmic_skeleton) escucha en puerto OSC **5007**
 - Detector **envía a ambos** simultáneamente
 
 | Servicio | Puerto OSC (entrada) | Puerto Web (salida) |
@@ -220,9 +220,11 @@ python3 src/dance_movement_detector.py \
 - Revisa `logs/detector.log`
 - Prueba con `--show-video` para ver detecciones
 
-### Dashboard/Visualizer no actualiza
+### El reconocimiento no se ve en el visualizador / Dashboard o visualizer no actualiza
+- **Causa frecuente:** El detector está usando `config.json`, que solo envía al puerto 5005 (dashboard). El visualizador cosmic_skeleton escucha en el puerto **5007** y no recibe nada.
+- **Solución:** Usar una config con `osc_destinations` que incluya 5005 y 5007. Si arrancás con `./scripts/perfo-start.sh`, ya usa `config/multi_destination.json` por defecto. Si arrancás el detector a mano, usá: `--config config/multi_destination.json` o `--config config/raspberry_pi_optimized.json`.
 - Verifica conexión WebSocket (indicador verde en UI)
-- Revisa que el detector esté enviando a los puertos correctos
+- Comprueba que los puertos 5005 y 5007 estén en uso por dashboard y visualizador: `lsof -i:5005` y `lsof -i:5007`
 - Chequea `logs/` para errores
 
 ### Ver procesos corriendo
@@ -233,7 +235,7 @@ ps aux | grep -E "(detector|dashboard|visualizer)" | grep -v grep
 ### Ver puertos en uso
 ```bash
 lsof -i:5005
-lsof -i:5006
+lsof -i:5007
 lsof -i:8081
 lsof -i:8090
 ```
@@ -258,7 +260,7 @@ lsof -i:8090
 {
   "osc_destinations": [
     {"host": "192.168.1.XXX", "port": 5005},  // IP de la RPi
-    {"host": "192.168.1.XXX", "port": 5006}
+    {"host": "192.168.1.XXX", "port": 5007}
   ]
 }
 
@@ -285,7 +287,7 @@ rm logs/*.log
 # Reiniciar un servicio específico
 ./scripts/kill-all-services.sh
 cd dance_visualizer
-./start.sh --osc-port 5006
+./start.sh --osc-port 5007
 ```
 
 ## 🐛 Debugging

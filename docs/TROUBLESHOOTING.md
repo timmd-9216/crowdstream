@@ -192,3 +192,35 @@ The system automatically detects the platform and sets defaults:
 You can override defaults with:
 - `--enable-filters`: Force enable filters
 - `--disable-filters`: Force disable filters
+
+---
+
+## Detector: reconocimiento no llega al dashboard o al visualizador
+
+### Problema
+El detector corre y detecta personas, pero el dashboard (8082) o el visualizador cosmic_skeleton (8091) no muestran datos o no se actualizan.
+
+### Causa frecuente: config sin múltiples destinos OSC
+- El detector puede usar **una sola** pareja `osc_host` / `osc_port` (ej. `config.json` → solo puerto 5005) o **varios** destinos con `osc_destinations`.
+- El **dashboard** escucha en **5005**. El **cosmic_skeleton** escucha en **5007**.
+- Si la config del detector solo tiene `osc_port: 5005` (como `config.json`), envía solo al dashboard; el visualizador en 5007 no recibe nada.
+
+### Solución
+1. Usar una config que tenga `osc_destinations` con al menos 5005 y 5007:
+   - **`config/multi_destination.json`** (es la que usa por defecto `perfo-start.sh`)
+   - **`config/raspberry_pi_optimized.json`** (alternativa optimizada RPi)
+2. Si arrancás todo con `./scripts/perfo-start.sh`, no hace falta cambiar nada: ya usa `multi_destination.json`.
+3. Si arrancás el detector a mano, pasar la config explícita:
+   ```bash
+   cd dance_movement_detector
+   ./start.sh --config config/multi_destination.json
+   ```
+4. Comprobar que dashboard y visualizador estén levantados **antes** que el detector y que los puertos estén libres:
+   ```bash
+   lsof -i:5005
+   lsof -i:5007
+   ```
+
+### Verificación
+- En el detector, al iniciar deberías ver algo como: `OSC destinations (4):` y la lista de host:port.
+- Si usás `config.json`, solo verás un destino (5005). Para que el reconocimiento se vea también en el visualizador, hace falta una config con `osc_destinations` que incluya el puerto 5007.
